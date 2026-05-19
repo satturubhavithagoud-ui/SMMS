@@ -99,7 +99,13 @@ def publish_social_post(post, platform_name, account, media_url=None):
 
     if platform_name == 'FACEBOOK':
         if post.media:
-            return publish_facebook_photo(account_id, post.caption, post.media.file, access_token)
+            with open(post.media.path, 'rb') as image_file:
+                return publish_facebook_photo(
+                    account_id,
+                    post.caption,
+                    image_file,
+                    access_token
+                )
         return publish_facebook_text(account_id, post.caption, access_token)
 
     if platform_name == 'INSTAGRAM':

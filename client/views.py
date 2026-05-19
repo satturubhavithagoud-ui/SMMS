@@ -693,7 +693,7 @@ def _serialize_post(post, request):
         'media_url': request.build_absolute_uri(post.media.url) if post.media else None,
     }
 
-
+'''
 @csrf_exempt
 def posts_view(request):
     client = _resolve_client(request)
@@ -747,9 +747,27 @@ def posts_view(request):
 
         if mode == 'later' and scheduled_time:
             parsed = parse_datetime(scheduled_time)
+
             if not parsed:
-                return JsonResponse({"error": "Scheduled time must be valid ISO 8601."}, status=400)
-            PostSchedule.objects.create(post=post, scheduled_time=parsed)
+                return JsonResponse(
+                    {"error": "Scheduled time must be valid ISO 8601."},
+                    status=400
+                )
+            from django.utils import timezone
+            if timezone.is_naive(parsed):
+                parsed = timezone.make_aware(parsed, timezone.get_current_timezone())
+
+            schedule = PostSchedule.objects.create(
+                post=post,
+                scheduled_time=parsed
+            )
+
+            from client.tasks import publish_scheduled_post
+
+            publish_scheduled_post.apply_async(
+                args=[post.id],
+                eta=schedule.scheduled_time
+            )
 
         response_body = {"message": "Post created successfully.", "post_id": post.id}
         if publish_results is not None:
@@ -758,3 +776,508 @@ def posts_view(request):
         return JsonResponse(response_body, status=201)
 
     return JsonResponse({"error": "Method not allowed."}, status=405)
+
+'''
+
+@csrf_exempt
+def posts_view(request):
+
+    if request.method == 'GET':
+
+        client = _resolve_client(request)
+
+        if not client:
+            return JsonResponse(
+                {"error": "No client found."},
+                status=400
+            )
+
+        posts = Post.objects.filter(
+            clients=client
+        ).order_by('-created_at')
+
+        data = []
+
+        for post in posts:
+
+            platforms = [
+                pp.platform.name.lower()
+                for pp in PostPlatform.objects.filter(post=post)
+            ]
+
+            schedule = getattr(post, 'postschedule', None)
+
+            data.append({
+                'id': post.id,
+                'title': post.title,
+                'caption': post.caption,
+                'status': post.status,
+                'platforms': platforms,
+                'created_at': post.created_at.isoformat(),
+                'scheduled_time': (
+                    schedule.scheduled_time.isoformat()
+                    if schedule else None
+                ),
+                'posted_time': (
+                    schedule.posted_time.isoformat()
+                    if schedule and schedule.posted_time else None
+                ),
+                'media_url': (
+                    request.build_absolute_uri(post.media.url)
+                    if post.media else None
+                ),
+            })
+
+        return JsonResponse(data, safe=False)
+
+    # =====================================================
+    # CREATE POSTS
+    # =====================================================
+
+    if request.method == 'POST':
+
+        try:
+
+            caption = request.POST.get('caption', '').strip()
+
+            platform_values = request.POST.getlist('platforms')
+
+            client_ids = request.POST.getlist('clients')
+
+            mode = request.POST.get('mode', 'now')
+
+            scheduled_time = request.POST.get(
+                'scheduled_time',
+                ''
+            ).strip()
+
+            media = request.FILES.get('media')
+
+            smh_user_id = request.POST.get('smh_user_id')
+
+            # ---------------------------------------------
+            # VALIDATIONS
+            # ---------------------------------------------
+
+            if not caption:
+                return JsonResponse(
+                    {"error": "Caption is required."},
+                    status=400
+                )
+
+            if not client_ids:
+                return JsonResponse(
+                    {"error": "Select at least one client."},
+                    status=400
+                )
+
+            if not platform_values:
+                return JsonResponse(
+                    {"error": "Select at least one platform."},
+                    status=400
+                )
+
+            if mode == 'later' and not scheduled_time:
+                return JsonResponse(
+                    {"error": "Scheduled time is required."},
+                    status=400
+                )
+
+            # ---------------------------------------------
+            # GET SMH
+            # ---------------------------------------------
+
+            smh = None
+
+            if smh_user_id:
+                smh = SMH.objects.filter(
+                    user__id=smh_user_id
+                ).first()
+
+            created_posts = []
+
+            all_publish_results = []
+
+            # ---------------------------------------------
+            # CREATE POST FOR EACH CLIENT
+            # ---------------------------------------------
+
+            for client_id in client_ids:
+
+                client = Client.objects.filter(
+                    id=client_id
+                ).first()
+
+                if not client:
+                    continue
+
+                # -----------------------------------------
+                # CREATE POST
+                # -----------------------------------------
+
+                post = Post.objects.create(
+                    created_by=smh,
+                    caption=caption,
+                    title=caption[:50],
+                    media=media,
+                    status='POSTED' if mode == 'now' else 'SCHEDULED'
+                )
+
+                post.clients.add(client)
+
+                created_posts.append(post)
+
+                # -----------------------------------------
+                # SAVE PLATFORMS
+                # -----------------------------------------
+
+                for platform_value in platform_values:
+
+                    platform = Platform.objects.filter(
+                        name__iexact=platform_value
+                    ).first()
+
+                    if platform:
+
+                        PostPlatform.objects.get_or_create(
+                            post=post,
+                            platform=platform
+                        )
+
+                # -----------------------------------------
+                # POST NOW
+                # -----------------------------------------
+
+                if mode == 'now':
+
+                    publish_results = _publish_post_to_graph(
+                        post,
+                        platform_values,
+                        request
+                    )
+
+                    all_publish_results.append({
+                        "post_id": post.id,
+                        "client_id": client.id,
+                        "results": publish_results
+                    })
+
+                    failed = [
+                        item
+                        for item in publish_results
+                        if item['status'] == 'failed'
+                    ]
+
+                    if failed:
+                        post.status = 'FAILED'
+                    else:
+                        post.status = 'POSTED'
+
+                    post.save()
+
+                # -----------------------------------------
+                # SCHEDULE LATER
+                # -----------------------------------------
+
+                if mode == 'later':
+
+                    parsed = parse_datetime(
+                        scheduled_time
+                    )
+
+                    if not parsed:
+                        return JsonResponse(
+                            {
+                                "error":
+                                "Scheduled time must be valid ISO 8601."
+                            },
+                            status=400
+                        )
+
+                    from django.utils import timezone
+
+                    if timezone.is_naive(parsed):
+
+                        parsed = timezone.make_aware(
+                            parsed,
+                            timezone.get_current_timezone()
+                        )
+
+                    schedule = PostSchedule.objects.create(
+                        post=post,
+                        scheduled_time=parsed
+                    )
+
+                    from client.tasks import (
+                        publish_scheduled_post
+                    )
+
+                    publish_scheduled_post.apply_async(
+                        args=[post.id],
+                        eta=schedule.scheduled_time
+                    )
+
+            # ---------------------------------------------
+            # FINAL RESPONSE
+            # ---------------------------------------------
+
+            return JsonResponse({
+                "message": "Posts created successfully.",
+                "total_posts": len(created_posts),
+                "post_ids": [
+                    post.id
+                    for post in created_posts
+                ],
+                "publish_results": all_publish_results
+            }, status=201)
+
+        except Exception as e:
+
+            return JsonResponse({
+                "error": str(e)
+            }, status=500)
+
+    return JsonResponse(
+        {"error": "Method not allowed."},
+        status=405
+    )
+
+
+# =========================================================
+# GET CLIENTS for smh_scheduler
+# =========================================================
+
+def clients_view(request):
+
+    clients = Client.objects.all()
+
+    data = []
+
+    for client in clients:
+
+        data.append({
+            "id": client.id,
+            "name": client.user.first_name,
+            "organization": client.organization_name,
+        })
+
+    return JsonResponse(data, safe=False)
+
+
+# =========================================================
+# SMH CREATE POSTS
+# =========================================================
+
+@csrf_exempt
+def smh_create_posts_view(request):
+
+    if request.method != 'POST':
+        return JsonResponse(
+            {"error": "Only POST allowed"},
+            status=405
+        )
+
+    try:
+
+        caption = request.POST.get('caption', '').strip()
+
+        client_ids = request.POST.getlist('client_ids')
+
+        platform_values = request.POST.getlist('platforms')
+
+        mode = request.POST.get('mode', 'now')
+
+        scheduled_time = request.POST.get('scheduled_time')
+
+        media = request.FILES.get('media')
+
+        if not caption:
+            return JsonResponse(
+                {"error": "Caption is required"},
+                status=400
+            )
+
+        if not client_ids:
+            return JsonResponse(
+                {"error": "Select clients"},
+                status=400
+            )
+
+        if not platform_values:
+            return JsonResponse(
+                {"error": "Select platforms"},
+                status=400
+            )
+
+        created_posts = []
+
+        for client_id in client_ids:
+
+            client = Client.objects.filter(id=client_id).first()
+
+            if not client:
+                continue
+
+            post = Post.objects.create(
+            caption=caption,
+            title=caption[:50],
+            media=media,
+            status='POSTED' if mode == 'now' else 'SCHEDULED',
+            post_type='NOW' if mode == 'now' else 'SCHEDULED',
+            created_by_role='SMH'
+            )
+
+            post.clients.add(client)
+
+            for platform_value in platform_values:
+
+                platform = Platform.objects.filter(
+                    name__iexact=platform_value
+                ).first()
+
+                if platform:
+
+                    PostPlatform.objects.get_or_create(
+                        post=post,
+                        platform=platform
+                    )
+
+            # POST NOW
+            if mode == 'now':
+
+                publish_results = _publish_smh_post_to_graph(
+                    post,
+                    client,
+                    platform_values,
+                    request
+                )
+
+                failed = [
+                    item for item in publish_results
+                    if item['status'] == 'failed'
+                ]
+
+                if failed:
+                    post.status = 'FAILED'
+                else:
+                    post.status = 'POSTED'
+
+                post.save()
+
+            # SCHEDULE
+            else:
+
+                parsed = parse_datetime(scheduled_time)
+
+                from django.utils import timezone
+
+                if timezone.is_naive(parsed):
+                    parsed = timezone.make_aware(
+                        parsed,
+                        timezone.get_current_timezone()
+                    )
+
+                schedule = PostSchedule.objects.create(
+                    post=post,
+                    scheduled_time=parsed
+                )
+
+                from client.tasks import publish_scheduled_post
+
+                publish_scheduled_post.apply_async(
+                    args=[post.id],
+                    eta=schedule.scheduled_time
+                )
+
+            created_posts.append(post.id)
+
+        return JsonResponse({
+            "message": "Posts processed successfully",
+            "posts": created_posts
+        })
+
+    except Exception as e:
+
+        return JsonResponse({
+            "error": str(e)
+        }, status=500)
+#--------------------------------------------------------------------------------
+
+
+def _publish_smh_post_to_graph(post, client, platform_values, request):
+
+    results = []
+
+    for platform_name in platform_values:
+
+        platform_name = platform_name.upper()
+
+        platform = Platform.objects.filter(
+            name__iexact=platform_name
+        ).first()
+
+        if not platform:
+
+            results.append({
+                "platform": platform_name,
+                "status": "unknown_platform"
+            })
+
+            continue
+
+        account = SocialMediaAccount.objects.filter(
+            client=client,
+            platform=platform,
+            is_active=True
+        ).first()
+
+        if not account:
+
+            results.append({
+                "platform": platform_name,
+                "status": "missing_account"
+            })
+
+            continue
+
+        if not account.access_token or not account.account_id:
+
+            results.append({
+                "platform": platform_name,
+                "status": "missing_credentials"
+            })
+
+            continue
+
+        try:
+
+            media_url = None
+
+            if post.media:
+
+                media_url = request.build_absolute_uri(
+                    post.media.url
+                )
+
+            publish_response = publish_social_post(
+                post,
+                platform_name,
+                account,
+                media_url=media_url
+            )
+
+            results.append({
+                "platform": platform_name,
+                "status": "published",
+                "response": publish_response
+            })
+
+        except Exception as error:
+
+            results.append({
+                "platform": platform_name,
+                "status": "failed",
+                "message": str(error)
+            })
+
+    return results
