@@ -144,10 +144,18 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
 CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:5174",
+    "http://127.0.0.1:5174",
     "http://localhost:5181",
     "http://127.0.0.1:5181",
 ]
 CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:5174",
+    "http://127.0.0.1:5174",
     "http://localhost:5181",
     "http://127.0.0.1:5181",
 ]
@@ -172,6 +180,7 @@ FACEBOOK_REDIRECT_URI = os.environ.get(
     'http://localhost:8000/api/oauth/callback/'
 )
 INSTAGRAM_REDIRECT_URI = os.environ.get('INSTAGRAM_REDIRECT_URI', 'http://localhost:8000/api/oauth/callback/')
-FRONTEND_BASE_URL = os.environ.get('FRONTEND_BASE_URL', 'http://localhost:5181')
+FRONTEND_BASE_URL = os.environ.get('FRONTEND_BASE_URL', 'http://localhost:5174')
+PUBLIC_MEDIA_BASE_URL = os.environ.get('PUBLIC_MEDIA_BASE_URL', '')
 
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')

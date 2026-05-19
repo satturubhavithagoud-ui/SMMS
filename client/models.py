@@ -126,12 +126,13 @@ class SocialMediaAccount(models.Model):
 
     account_username = models.CharField(max_length=255)
 
-    account_id = models.CharField(
-        max_length=255,
-        blank=True
-    )
+    account_id = models.CharField(max_length=255, blank=True)
 
     access_token = models.TextField(blank=True)
+
+    page_access_token = models.TextField(blank=True)
+
+    instagram_business_account_id = models.CharField(max_length=255, blank=True)
 
     refresh_token = models.TextField(blank=True)
 

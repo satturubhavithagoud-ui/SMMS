@@ -1,8 +1,9 @@
 import json
+import os
 import requests
 import secrets
 from datetime import datetime, timedelta
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, urlparse
 from django.core.cache import cache
 from django.conf import settings
 from django.http import JsonResponse
@@ -171,9 +172,12 @@ def login_view(request):
         # -----------------------------
 
         role = None
+        client_id = None
 
         if Client.objects.filter(user=user).exists():
             role = "CLIENT"
+            client_obj = Client.objects.filter(user=user).first()
+            client_id = client_obj.id if client_obj else None
 
         elif SMH.objects.filter(user=user).exists():
             role = "SMH"
@@ -181,13 +185,17 @@ def login_view(request):
         else:
             role = "UNKNOWN"
 
-        return JsonResponse({
+        response_data = {
             "message": "Login successful",
             "user_id": user.id,
             "username": user.first_name,
             "email": user.email,
             "role": role
-        })
+        }
+        if client_id:
+            response_data["client_id"] = client_id
+
+        return JsonResponse(response_data)
 
     except Exception as e:
         return JsonResponse({
@@ -246,7 +254,7 @@ def oauth_initiate_view(request):
             scope = "pages_manage_posts,pages_read_engagement,pages_show_list,instagram_basic,instagram_content_publish"
             auth_url = (
                 f"https://www.facebook.com/{settings.FACEBOOK_GRAPH_API_VERSION}/dialog/oauth?"
-                f"client_id={app_id}&redirect_uri={redirect_uri}&scope={scope}&state={state}&response_type=code"
+                f"client_id={app_id}&redirect_uri={redirect_uri}&scope={scope}&state={state}&response_type=code&auth_type=rerequest"
             )
 
         elif platform_name == "INSTAGRAM":
@@ -255,7 +263,9 @@ def oauth_initiate_view(request):
             if not app_id or not redirect_uri:
                 return JsonResponse({"error": "Instagram OAuth not configured"}, status=500)
 
-            scope = "instagram_basic,instagram_content_publish,user_profile,user_media"
+            # Use Instagram Business / Facebook Page permissions for the business login flow.
+            # Remove user_profile/user_media because the Graph API publishing flow uses page-based auth.
+            scope = "pages_show_list,pages_read_engagement,instagram_basic,instagram_content_publish"
             auth_url = (
                 f"https://www.facebook.com/{settings.FACEBOOK_GRAPH_API_VERSION}/dialog/oauth?"
                 f"client_id={app_id}&redirect_uri={redirect_uri}&scope={scope}&state={state}&response_type=code"
@@ -301,7 +311,7 @@ def oauth_callback_view(request):
             raw_state = request.GET.get("state")
             error = request.GET.get("error")
 
-        frontend_base = getattr(settings, 'FRONTEND_BASE_URL', 'http://localhost:5181')
+        frontend_base = getattr(settings, 'FRONTEND_BASE_URL', 'http://localhost:5174')
 
         platform_name = ""
         if raw_state and ":" in raw_state:
@@ -390,17 +400,24 @@ def oauth_callback_view(request):
         profile_data = None
         account_username = None
         account_id = None
+        page_access_token = None
+        instagram_business_account_id = None
 
         if platform_name == "FACEBOOK":
             # Get user's pages
             pages_url = f"https://graph.facebook.com/{settings.FACEBOOK_GRAPH_API_VERSION}/me/accounts"
-            pages_params = {"access_token": access_token}
+            pages_params = {
+                "access_token": access_token,
+                "fields": "id,name,access_token,tasks"
+            }
             pages_response = requests.get(pages_url, params=pages_params)
 
             if pages_response.status_code != 200:
                 raise requests.RequestException(f"facebook_pages_lookup_failed:{pages_response.status_code}")
 
             pages_data = pages_response.json()
+            if settings.DEBUG:
+                print(f"[DEBUG] Facebook pages lookup response: {pages_data}")
             if not pages_data.get("data"):
                 raise requests.RequestException("no_facebook_pages")
 
@@ -408,28 +425,31 @@ def oauth_callback_view(request):
             page = pages_data["data"][0]
             account_id = page.get("id")
             account_username = page.get("name") or page.get("id")
+            page_access_token = page.get("access_token")
+            
+            if not page_access_token:
+                raise requests.RequestException("no_page_access_token_in_response")
+            
+            access_token = page_access_token
+            if settings.DEBUG:
+                print(f"[DEBUG] Using page access token for page {account_id}")
 
         elif platform_name == "INSTAGRAM":
-            # Get Instagram business account
-            ig_url = f"https://graph.facebook.com/{settings.FACEBOOK_GRAPH_API_VERSION}/me/accounts"
-            ig_params = {"access_token": access_token}
-            ig_response = requests.get(ig_url, params=ig_params)
+            page_data = fetch_page_with_ig(access_token)
+            if settings.DEBUG:
+                print(f"[DEBUG] fetch_page_with_ig result: {page_data}")
 
-            if ig_response.status_code != 200:
-                raise requests.RequestException(f"instagram_account_lookup_failed:{ig_response.status_code}")
+            instagram_business_account_id = page_data["instagram_business_account_id"]
+            account_id = instagram_business_account_id
+            account_username = page_data.get("page_name") or page_data["page_id"]
+            page_access_token = page_data["page_access_token"]
 
-            ig_data = ig_response.json()
-            if not ig_data.get("data"):
+            if not instagram_business_account_id:
                 raise requests.RequestException("no_instagram_business_account")
+            if not page_access_token:
+                raise requests.RequestException("no_page_access_token_in_response")
 
-            for account in ig_data["data"]:
-                if account.get("instagram_business_account"):
-                    account_id = account["instagram_business_account"]["id"]
-                    account_username = account["instagram_business_account"].get("username")
-                    break
-
-            if not account_id:
-                raise requests.RequestException("no_instagram_business_account")
+            access_token = page_access_token
 
         # Normalize account values to avoid NULL inserts for fields that require strings
         account_id = account_id or ''
@@ -443,6 +463,8 @@ def oauth_callback_view(request):
                 'account_username': account_username,
                 'account_id': account_id,
                 'access_token': access_token,
+                'page_access_token': page_access_token or '',
+                'instagram_business_account_id': instagram_business_account_id or '',
                 'token_expiry': token_expiry,
                 'is_active': True,
             }
@@ -452,6 +474,8 @@ def oauth_callback_view(request):
             account.account_username = account_username
             account.account_id = account_id or account.account_id or ''
             account.access_token = access_token
+            account.page_access_token = page_access_token or account.page_access_token or ''
+            account.instagram_business_account_id = instagram_business_account_id or account.instagram_business_account_id or ''
             account.token_expiry = token_expiry
             account.is_active = True
             account.save()
@@ -611,6 +635,52 @@ def connected_platforms_view(request):
     return JsonResponse({"error": "Method not allowed."}, status=405)
 
 
+def _is_local_url(url):
+    parsed = urlparse(url)
+    hostname = (parsed.hostname or '').lower()
+    return hostname in {'localhost', '127.0.0.1'}
+
+
+def _read_env_file_value(key):
+    env_path = os.path.join(settings.BASE_DIR, '.env')
+    if not os.path.exists(env_path):
+        return ''
+
+    with open(env_path, 'r', encoding='utf-8') as env_file:
+        for raw_line in env_file:
+            line = raw_line.strip()
+            if not line or line.startswith('#') or '=' not in line:
+                continue
+            env_key, env_value = line.split('=', 1)
+            if env_key.strip() == key:
+                return env_value.strip().strip('"').strip("'")
+
+    return ''
+
+
+def _get_public_media_base(request):
+    configured_base = getattr(settings, 'PUBLIC_MEDIA_BASE_URL', '').strip()
+    if not configured_base:
+        configured_base = _read_env_file_value('PUBLIC_MEDIA_BASE_URL')
+    if configured_base:
+        return configured_base
+
+    for setting_name in ['INSTAGRAM_REDIRECT_URI', 'FACEBOOK_REDIRECT_URI']:
+        redirect_uri = getattr(settings, setting_name, '').strip()
+        if not redirect_uri:
+            redirect_uri = _read_env_file_value(setting_name)
+        parsed = urlparse(redirect_uri)
+        hostname = (parsed.hostname or '').lower()
+        if parsed.scheme and parsed.netloc and hostname not in {'localhost', '127.0.0.1'}:
+            return f'{parsed.scheme}://{parsed.netloc}'
+
+    request_base = request.build_absolute_uri('/')
+    if not _is_local_url(request_base):
+        return request_base.rstrip('/')
+
+    return ''
+
+
 def _publish_post_to_graph(post, platform_values, request):
     results = []
     for platform_name in platform_values:
@@ -621,49 +691,63 @@ def _publish_post_to_graph(post, platform_values, request):
             continue
 
         account = SocialMediaAccount.objects.filter(client=post.client, platform=platform, is_active=True).first()
-        if account and platform_name in ['FACEBOOK', 'INSTAGRAM']:
-            if platform_name == 'FACEBOOK':
-                env_token = getattr(settings, 'FACEBOOK_ACCESS_TOKEN', '')
-            else:
-                env_token = getattr(settings, 'INSTAGRAM_ACCESS_TOKEN', '')
-            if env_token:
-                account.access_token = env_token
-            if platform_name == 'FACEBOOK':
-                env_account_id = getattr(settings, 'FACEBOOK_PAGE_ID', '')
-            else:
-                env_account_id = getattr(settings, 'INSTAGRAM_BUSINESS_ACCOUNT_ID', '')
-            if env_account_id:
-                account.account_id = account.account_id or env_account_id
-
+        
         if not account:
-            if platform_name == 'FACEBOOK':
-                fallback_token = getattr(settings, 'FACEBOOK_ACCESS_TOKEN', '')
-                fallback_account_id = getattr(settings, 'FACEBOOK_PAGE_ID', '')
-            else:
-                fallback_token = getattr(settings, 'INSTAGRAM_ACCESS_TOKEN', '')
-                fallback_account_id = getattr(settings, 'INSTAGRAM_BUSINESS_ACCOUNT_ID', '')
+            results.append({"platform": platform_name, "status": "missing_account"})
+            if settings.DEBUG:
+                print(f"[DEBUG] No connected account found for client {post.client.id}, platform {platform_name}")
+            continue
 
-            if fallback_token and fallback_account_id:
-                class FallbackAccount:
-                    pass
-
-                account = FallbackAccount()
-                account.access_token = fallback_token
-                account.account_id = fallback_account_id
-            else:
-                results.append({"platform": platform_name, "status": "missing_account"})
+        if platform_name == 'INSTAGRAM':
+            if not (getattr(account, 'page_access_token', None) or getattr(account, 'access_token', None)) or not getattr(account, 'instagram_business_account_id', None):
+                results.append({"platform": platform_name, "status": "missing_credentials", "message": "Instagram account missing page_access_token or instagram_business_account_id"})
+                if settings.DEBUG:
+                    print(f"[DEBUG] Account {account.id} missing Instagram credentials: page_access_token={getattr(account, 'page_access_token', None)}, instagram_business_account_id={getattr(account, 'instagram_business_account_id', None)}")
+                continue
+        else:
+            if not account.access_token or not account.account_id:
+                results.append({"platform": platform_name, "status": "missing_credentials", "message": "Account missing token or ID"})
+                if settings.DEBUG:
+                    print(f"[DEBUG] Account {account.id} missing token or account_id")
                 continue
 
         try:
             media_url = None
             if post.media:
                 media_url = request.build_absolute_uri(post.media.url)
+                if media_url and _is_local_url(media_url):
+                    public_media_base = _get_public_media_base(request)
+                    if public_media_base:
+                        parsed = urlparse(media_url)
+                        media_url = public_media_base.rstrip('/') + parsed.path
+                        if parsed.query:
+                            media_url += '?' + parsed.query
+                        if settings.DEBUG:
+                            print(f"[DEBUG] Rewriting local media URL to public tunnel: {media_url}")
+                    else:
+                        raise ValueError(
+                            "Instagram publishing requires a publicly reachable media URL. "
+                            "Localhost or 127.0.0.1 URLs are not accessible to Instagram. "
+                            "Set PUBLIC_MEDIA_BASE_URL to your ngrok or public tunnel URL, "
+                            "or set INSTAGRAM_REDIRECT_URI/FACEBOOK_REDIRECT_URI to that public backend URL."
+                        )
+            print("POST MEDIA:", post.media)
+            print("POST MEDIA URL:", getattr(post.media, "url", None))
+            print("FINAL MEDIA URL:", media_url)
+            print("ACCOUNT ID:", account.account_id)
+            print("ACCESS TOKEN:", account.access_token[:10] if account.access_token else None)
+            print("RAW post.media.url =", request.build_absolute_uri(post.media.url))
+            print("PUBLIC_MEDIA_BASE_URL =", settings.PUBLIC_MEDIA_BASE_URL)
+            print("FINAL media_url sent to IG =", media_url)
             publish_response = publish_social_post(post, platform_name, account, media_url=media_url)
             results.append({"platform": platform_name, "status": "published", "response": publish_response})
         except NotImplementedError as not_impl:
             results.append({"platform": platform_name, "status": "unsupported", "message": str(not_impl)})
         except Exception as error:
-            results.append({"platform": platform_name, "status": "failed", "message": str(error)})
+            error_message = str(error)
+            results.append({"platform": platform_name, "status": "failed", "message": error_message})
+            if settings.DEBUG:
+                print(f"[DEBUG] publish failed for client {post.client.id}, platform {platform_name}, account {getattr(account, 'account_id', None)}: {error_message}")
 
     return results
 
@@ -709,6 +793,11 @@ def posts_view(request):
         scheduled_time = request.POST.get('scheduled_time', '').strip()
         media = request.FILES.get('media')
 
+        print("FILES:", request.FILES)
+        print("SELECTED FILE:", request.FILES.get("media"))
+        if request.FILES.get("media"):
+            print("SELECTED FILE NAME:", request.FILES["media"].name)
+
         if not caption:
             return JsonResponse({"error": "Caption is required."}, status=400)
         if not platform_values:
@@ -724,6 +813,8 @@ def posts_view(request):
             status='POSTED' if mode == 'now' else 'SCHEDULED'
         )
 
+        print(f"[DEBUG] Post created: {post.id}, post.media={post.media}, post.media.name={getattr(post.media, 'name', 'N/A')}")
+
         for platform_value in platform_values:
             platform = Platform.objects.filter(name__iexact=platform_value).first()
             if platform:
@@ -732,6 +823,8 @@ def posts_view(request):
         publish_results = None
         if mode == 'now':
             publish_results = _publish_post_to_graph(post, platform_values, request)
+            if settings.DEBUG:
+                print(f"[DEBUG] publish_results for post {post.id}: {publish_results}")
             failed = [item for item in publish_results if item['status'] == 'failed']
             if failed:
                 post.status = 'FAILED'
@@ -753,3 +846,36 @@ def posts_view(request):
         return JsonResponse(response_body, status=201)
 
     return JsonResponse({"error": "Method not allowed."}, status=405)
+
+    #-------
+    import requests
+from django.conf import settings
+
+GRAPH_API_VERSION = getattr(settings, "FACEBOOK_GRAPH_API_VERSION", "v17.0")
+GRAPH_API_BASE_URL = f"https://graph.facebook.com/{GRAPH_API_VERSION}"
+
+def fetch_page_with_ig(user_access_token):
+    url = f"{GRAPH_API_BASE_URL}/me/accounts"
+
+    params = {
+        "fields": "id,name,access_token,instagram_business_account",
+        "access_token": user_access_token,
+    }
+
+    response = requests.get(url, params=params, timeout=30)
+    response.raise_for_status()
+
+    pages = response.json().get("data", [])
+
+    for page in pages:
+        ig = page.get("instagram_business_account")
+
+        if ig and ig.get("id"):
+            return {
+                "page_id": page["id"],
+                "page_name": page.get("name"),
+                "page_access_token": page["access_token"],
+                "instagram_business_account_id": ig["id"],
+            }
+
+    raise ValueError("no_instagram_business_account")

@@ -22,7 +22,7 @@ def publish_facebook_photo(page_id, caption, image_file, access_token):
         'access_token': access_token,
     }
     response = requests.post(url, data=data, files=files, timeout=30)
-    response.raise_for_status()
+    _raise_for_status_with_body(response)
     return response.json()
 
 
@@ -33,7 +33,7 @@ def publish_facebook_text(page_id, caption, access_token):
         'access_token': access_token,
     }
     response = requests.post(url, data=data, timeout=30)
-    response.raise_for_status()
+    _raise_for_status_with_body(response)
     return response.json()
 
 
@@ -83,8 +83,12 @@ def publish_social_post(post, platform_name, account, media_url=None):
     account_id = None
 
     if account is not None:
-        access_token = getattr(account, 'access_token', None)
-        account_id = getattr(account, 'account_id', None)
+        if platform_name == 'INSTAGRAM':
+            access_token = getattr(account, 'page_access_token', None) or getattr(account, 'access_token', None)
+            account_id = getattr(account, 'instagram_business_account_id', None)
+        else:
+            access_token = getattr(account, 'access_token', None)
+            account_id = getattr(account, 'account_id', None)
 
     if not access_token or not account_id:
         if platform_name == 'FACEBOOK':
