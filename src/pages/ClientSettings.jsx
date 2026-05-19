@@ -11,8 +11,19 @@ const PLATFORM_META = {
   twitter: { label: 'Twitter', icon: 'close', color: '#1DA1F2' },
 };
 
+function getClientId() {
+  if (typeof window === 'undefined') return null;
+  try {
+    const user = JSON.parse(window.localStorage.getItem('user') || '{}');
+    return user?.client_id || null;
+  } catch {
+    return null;
+  }
+}
+
 export default function ClientSettings() {
   const [activeTab, setActiveTab] = useState('general');
+  const clientId = getClientId();
 
   const tabs = [
     { id: 'general', label: 'General' },
@@ -28,6 +39,31 @@ export default function ClientSettings() {
 
   useEffect(() => {
     loadPlatforms();
+  }, []);
+
+  useEffect(() => {
+    const allowedOrigins = [window.location.origin, 'http://localhost:5174', 'http://127.0.0.1:5174'];
+    const handleOAuthMessage = (event) => {
+      if (!allowedOrigins.includes(event.origin)) {
+        return;
+      }
+      const data = event.data;
+      if (!data || data.type !== 'oauth_result') {
+        return;
+      }
+
+      if (data.success) {
+        setConnectMessage(
+          `Successfully connected ${data.platform || 'platform'}${data.account ? ` (${data.account})` : ''}. Refreshing...`
+        );
+      } else {
+        setConnectMessage(`OAuth failed: ${data.error || 'Unknown error'}`);
+      }
+      loadPlatforms();
+    };
+
+    window.addEventListener('message', handleOAuthMessage);
+    return () => window.removeEventListener('message', handleOAuthMessage);
   }, []);
 
   async function loadPlatforms() {
@@ -64,7 +100,7 @@ export default function ClientSettings() {
       const platform = selectedPlatforms[0];
       const response = await initiateOAuth({
         platform: platform,
-        client_id: null // Will be resolved server-side
+        client_id: clientId,
       });
 
       if (response.auth_url) {
@@ -74,6 +110,12 @@ export default function ClientSettings() {
           'oauth',
           'width=600,height=700,scrollbars=yes,resizable=yes'
         );
+
+        if (!oauthWindow) {
+          setConnectMessage('Popup blocked. Redirecting to OAuth in this tab...');
+          window.location.href = response.auth_url;
+          return;
+        }
 
         // Poll for window close
         const checkClosed = setInterval(() => {

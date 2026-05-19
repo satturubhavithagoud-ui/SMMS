@@ -149,16 +149,24 @@ export default function ClientScheduler() {
   const [submitting, setSubmitting] = useState(false);
   const [scheduledPosts, setScheduledPosts] = useState([]);
   const [loadingPosts, setLoadingPosts] = useState(true);
+  const [clientId, setClientId] = useState(null);
 
   useEffect(() => {
+    const user = JSON.parse(window.localStorage.getItem('user') || '{}');
+    setClientId(user?.client_id || null);
     loadPlatforms();
-    loadPosts();
     return () => {
       if (imagePreview) {
         URL.revokeObjectURL(imagePreview);
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (clientId !== null) {
+      loadPosts();
+    }
+  }, [clientId]);
 
   async function loadPlatforms() {
     try {
@@ -174,7 +182,7 @@ export default function ClientScheduler() {
   async function loadPosts() {
     setLoadingPosts(true);
     try {
-      const posts = await getPosts();
+      const posts = await getPosts(clientId);
       if (Array.isArray(posts)) {
         setScheduledPosts(posts);
       }
@@ -253,9 +261,21 @@ export default function ClientScheduler() {
       formData.append('scheduled_time', `${scheduledDate}T${scheduledTime}`);
     }
 
+    console.log("FormData entries:", Array.from(formData.entries()));
+    console.log("imageFile before submit:", imageFile);
+
     setSubmitting(true);
     try {
-      await createPost(formData);
+      const response = await createPost(formData, clientId);
+      console.log("Full response:", JSON.stringify(response, null, 2));
+      if (response.publish_results) {
+        console.log("Publish results:", response.publish_results);
+        const failed = response.publish_results.filter((item) => item.status === 'failed');
+        if (failed.length > 0) {
+          const details = failed.map((item) => `${item.platform}: ${item.message}`).join('; ');
+          setFormError(`Post saved but failed to publish: ${details}`);
+        }
+      }
       resetForm();
       setShowAddPost(false);
       await loadPosts();
@@ -283,7 +303,12 @@ export default function ClientScheduler() {
       content: post.caption || post.content || '',
       date: formatDateTime(scheduledTime, { month: 'short', day: 'numeric' }),
       time: formatDateTime(scheduledTime, { hour: '2-digit', minute: '2-digit' }),
-      prediction: status === 'POSTED' ? 'Published Immediately' : 'Scheduled for later',
+      prediction:
+        status === 'POSTED'
+          ? 'Published Immediately'
+          : status === 'FAILED'
+          ? 'Publish Failed'
+          : 'Scheduled for later',
       gradient: bg,
       icon,
       status,

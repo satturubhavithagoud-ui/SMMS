@@ -7,6 +7,33 @@ export default function OAuthCallback() {
   const [searchParams] = useSearchParams();
   const [status, setStatus] = useState('Processing OAuth callback...');
 
+  const notifyOpener = (payload) => {
+    if (typeof window === 'undefined') return;
+    if (window.opener) {
+      try {
+        window.opener.postMessage({ type: 'oauth_result', ...payload }, '*');
+      } catch (err) {
+        console.warn('Failed to postMessage to opener:', err);
+      }
+    }
+  };
+
+  const completeCallback = (message, payload = null, delay = 2000) => {
+    setStatus(message);
+
+    if (payload) {
+      notifyOpener(payload);
+    }
+
+    setTimeout(() => {
+      if (typeof window !== 'undefined' && window.opener) {
+        window.close();
+      } else {
+        navigate('/settings');
+      }
+    }, delay);
+  };
+
   useEffect(() => {
     const processCallback = async () => {
       // What Facebook sends back
@@ -22,17 +49,21 @@ export default function OAuthCallback() {
 
       // Case 1: Facebook returned an error
       if (error) {
-        setStatus(
-          `Authentication failed: ${error.replace(/_/g, ' ')}${details ? ` — ${details}` : ''}`
+        completeCallback(
+          `Authentication failed: ${error.replace(/_/g, ' ')}${details ? ` — ${details}` : ''}`,
+          { success: false, error, details },
+          3000
         );
-        setTimeout(() => navigate('/settings'), 3000);
         return;
       }
 
       // Case 2: Django already processed and redirected back with success
       if (success && platform) {
-        setStatus(`Successfully connected ${platform}${account ? ` (${account})` : ''}! Redirecting...`);
-        setTimeout(() => navigate('/settings'), 2000);
+        completeCallback(
+          `Successfully connected ${platform}${account ? ` (${account})` : ''}! Redirecting...`,
+          { success: true, platform, account },
+          2000
+        );
         return;
       }
 
@@ -43,22 +74,18 @@ export default function OAuthCallback() {
           const response = await handleOAuthCallback({ code, state });
 
           if (response.success) {
-            setStatus(`Successfully connected! Redirecting...`);
-            setTimeout(() => navigate('/settings'), 2000);
+            completeCallback(`Successfully connected! Redirecting...`, { success: true, platform: response.platform, account: response.account }, 2000);
           } else {
-            setStatus(`Authentication failed: ${response.error || 'Unknown error'}`);
-            setTimeout(() => navigate('/settings'), 3000);
+            completeCallback(`Authentication failed: ${response.error || 'Unknown error'}`, { success: false, error: response.error }, 3000);
           }
         } catch (err) {
-          setStatus('Authentication failed. Please try again.');
-          setTimeout(() => navigate('/settings'), 3000);
+          completeCallback('Authentication failed. Please try again.', { success: false, error: err.message || 'unknown_error' }, 3000);
         }
         return;
       }
 
       // Case 4: No valid params at all
-      setStatus('Invalid callback parameters. Redirecting...');
-      setTimeout(() => navigate('/settings'), 2000);
+      completeCallback('Invalid callback parameters. Redirecting...', null, 2000);
     };
 
     processCallback();

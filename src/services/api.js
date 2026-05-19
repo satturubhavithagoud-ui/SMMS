@@ -2,16 +2,26 @@ const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api";  // 127.0.0.1 → localhost
 
 export async function apiRequest(path, options = {}) {
+  const url = `${API_BASE_URL}${path}`;
   const headers = {
     "Content-Type": "application/json",
     ...(options.headers ?? {}),
   };
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers,
-    credentials: "include",  // ← ADD THIS — required for sessions to work
-  });
+  let response;
+  try {
+    response = await fetch(url, {
+      ...options,
+      headers,
+      credentials: "include",
+    });
+  } catch (networkError) {
+    const error = new Error(
+      `Network request failed: ${networkError.message}`
+    );
+    error.status = 0;
+    throw error;
+  }
 
   const contentType = response.headers.get("content-type") ?? "";
   const payload = contentType.includes("application/json")
