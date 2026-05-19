@@ -537,79 +537,71 @@ export default function ClientScheduler() {
         </div>
 
         <div className="col-span-12 lg:col-span-3 space-y-xl">
-          <div className="bg-white rounded-xl border border-outline-variant/30 shadow-sm overflow-hidden">
-            <div className="p-md border-b border-outline-variant/20">
-              <h3 className="font-headline-md text-sm font-bold uppercase tracking-wide text-on-surface-variant">Connected Platforms</h3>
-            </div>
-            <div className="divide-y divide-outline-variant/10">
-              {[
-                { name: 'Instagram', stats: '12.4k followers', color: 'text-pink-600', icon: 'camera', status: 'check_circle' },
-                { name: 'Facebook', stats: '8.9k likes', color: 'text-blue-600', icon: 'facebook', status: 'check_circle' },
-                { name: 'Twitter/X', stats: '42.1k followers', color: 'text-black', icon: 'close', status: 'check_circle' },
-                { name: 'LinkedIn', stats: '156 Connections', color: 'text-[#0077B5]', icon: 'groups', status: 'pending' },
-              ].map((p, idx) => (
-                <div key={idx} className="px-md py-4 flex items-center justify-between hover:bg-surface-container-low transition-colors">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-2 h-2 rounded-full ${p.status === 'check_circle' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-orange-400'}`}></div>
-                    <span className={`material-symbols-outlined ${p.color}`}>{p.icon}</span>
-                    <div>
-                      <p className="text-sm font-bold">{p.name}</p>
-                      <p className="text-[10px] text-on-surface-variant">{p.stats}</p>
-                    </div>
-                  </div>
-                  <span className={`material-symbols-outlined text-sm ${p.status === 'check_circle' ? 'text-on-surface-variant' : 'text-on-surface-variant'}`} style={{ fontVariationSettings: p.status === 'check_circle' ? "'FILL' 1" : "'FILL' 0" }}>{p.status}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+  <div className="bg-white rounded-xl border border-outline-variant/30 shadow-sm overflow-hidden">
+    
+    <div className="p-md border-b border-outline-variant/20">
+      <h3 className="font-headline-md text-sm font-bold uppercase tracking-wide text-on-surface-variant">
+        Connected Platforms
+      </h3>
+    </div>
 
-        <div className="col-span-12">
-          <div className="bg-white p-lg rounded-xl border border-outline-variant/30 shadow-sm">
-            <div className="flex justify-between items-center mb-10">
+    <div className="divide-y divide-outline-variant/10">
+      {platformOptions.length > 0 ? (
+        platformOptions.map((p, idx) => (
+          <div
+            key={idx}
+            className="px-md py-4 flex items-center justify-between hover:bg-surface-container-low transition-colors"
+          >
+            <div className="flex items-center gap-3">
+
+              <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
+
+              <span
+                className={`material-symbols-outlined ${
+                  p.value === 'instagram'
+                    ? 'text-pink-600'
+                    : p.value === 'facebook'
+                    ? 'text-blue-600'
+                    : p.value === 'linkedin'
+                    ? 'text-[#0077B5]'
+                    : p.value === 'youtube'
+                    ? 'text-red-600'
+                    : p.value === 'twitter'
+                    ? 'text-black'
+                    : 'text-on-surface'
+                }`}
+              >
+                {PLATFORM_ICON_MAP[p.value] || 'language'}
+              </span>
+
               <div>
-                <h3 className="font-headline-md text-headline-md">Posts This Week</h3>
-                <p className="text-on-surface-variant text-sm">Distribution of content types across the week</p>
-              </div>
-              <div className="flex items-center gap-6">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-sm bg-primary"></div>
-                  <span className="text-xs font-semibold">Published</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-sm bg-inverse-primary"></div>
-                  <span className="text-xs font-semibold">Scheduled</span>
-                </div>
+                <p className="text-sm font-bold">
+                  {p.label}
+                </p>
+
+                <p className="text-[10px] text-on-surface-variant">
+                  Connected
+                </p>
               </div>
             </div>
-            <div className="flex items-end justify-between h-48 px-4 relative">
-              {[
-                { day: 'MON', p: 60, s: 30 },
-                { day: 'TUE', p: 45, s: 15 },
-                { day: 'WED', p: 80, s: 10 },
-                { day: 'THU', p: 55, s: 40 },
-                { day: 'FRI', p: 90, s: 10 },
-                { day: 'SAT', p: 20, s: 60 },
-                { day: 'SUN', p: 10, s: 75 },
-              ].map((d, idx) => (
-                <div key={idx} className="flex flex-col items-center gap-2 flex-1 group">
-                  <div className="w-full max-w-[48px] flex items-end gap-1 px-1 h-full">
-                    <div className="flex-1 bg-primary rounded-t-sm group-hover:opacity-80 transition-all" style={{ height: `${d.p}%` }}></div>
-                    <div className="flex-1 bg-inverse-primary rounded-t-sm group-hover:opacity-80 transition-all" style={{ height: `${d.s}%` }}></div>
-                  </div>
-                  <span className="text-xs font-label-bold text-on-surface-variant">{d.day}</span>
-                </div>
-              ))}
-              <div className="absolute inset-0 pointer-events-none -z-10 flex flex-col justify-between pt-0 pb-6 opacity-10">
-                <div className="w-full border-t border-on-surface-variant"></div>
-                <div className="w-full border-t border-on-surface-variant"></div>
-                <div className="w-full border-t border-on-surface-variant"></div>
-                <div className="w-full border-t border-on-surface-variant"></div>
-              </div>
-            </div>
+
+            <span
+              className="material-symbols-outlined text-sm text-emerald-500"
+              style={{ fontVariationSettings: "'FILL' 1" }}
+            >
+              check_circle
+            </span>
           </div>
+        ))
+      ) : (
+        <div className="px-md py-6 text-center text-sm text-on-surface-variant">
+          No connected platforms
         </div>
-      </div>
+      )}
+    </div>
+  </div>
+</div>
+</div>
     </ClientLayout>
   );
 }

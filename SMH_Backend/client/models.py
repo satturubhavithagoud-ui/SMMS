@@ -243,15 +243,32 @@ class Post(models.Model):
         ('FAILED', 'Failed'),
     ]
 
-    client = models.ForeignKey(
+    POST_TYPE_CHOICES = [
+        ('NOW', 'Post Now'),
+        ('SCHEDULED', 'Scheduled'),
+    ]
+
+    CREATED_BY_CHOICES = [
+        ('CLIENT', 'Client'),
+        ('SMH', 'SMH'),
+    ]
+
+    clients = models.ManyToManyField(
         Client,
-        on_delete=models.CASCADE
+        related_name='posts'
     )
 
     created_by = models.ForeignKey(
         SMH,
         on_delete=models.SET_NULL,
-        null=True
+        null=True,
+        blank=True
+    )
+
+    created_by_role = models.CharField(
+        max_length=20,
+        choices=CREATED_BY_CHOICES,
+        default='SMH'
     )
 
     title = models.CharField(
@@ -269,6 +286,12 @@ class Post(models.Model):
         null=True
     )
 
+    post_type = models.CharField(
+        max_length=20,
+        choices=POST_TYPE_CHOICES,
+        default='NOW'
+    )
+
     status = models.CharField(
         max_length=30,
         choices=STATUS_CHOICES,
@@ -281,7 +304,6 @@ class Post(models.Model):
 
     def __str__(self):
         return self.title if self.title else f"Post {self.id}"
-
 
 # =========================================================
 # POST PLATFORM MODEL
