@@ -11,6 +11,7 @@ from django.contrib.auth.models import User
 from django.contrib.auth import authenticate
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.dateparse import parse_datetime
+from django.utils import timezone
 from django.shortcuts import redirect
 from django.urls import reverse
 
@@ -24,7 +25,11 @@ from .models import (
     PostPlatform,
     PostSchedule,
 )
-from .facebook_api import publish_social_post
+from .facebook_api import (
+    publish_social_post,
+    fetch_instagram_account_analytics,
+    fetch_facebook_page_analytics,
+)
 
 
 def ensure_platform_records():
@@ -388,13 +393,13 @@ def oauth_callback_view(request):
                 return redirect(frontend_callback_url)
             return JsonResponse({"success": False, "error": "token_exchange_failed"}, status=400)
 
-        access_token = token_data["access_token"]
+        user_access_token = token_data["access_token"]
         expires_in = token_data.get("expires_in")
 
         # Calculate token expiry
         token_expiry = None
         if expires_in:
-            token_expiry = datetime.now() + timedelta(seconds=expires_in)
+            token_expiry = timezone.now() + timedelta(seconds=expires_in)
 
         # Get user profile information
         profile_data = None
@@ -407,7 +412,7 @@ def oauth_callback_view(request):
             # Get user's pages
             pages_url = f"https://graph.facebook.com/{settings.FACEBOOK_GRAPH_API_VERSION}/me/accounts"
             pages_params = {
-                "access_token": access_token,
+                "access_token": user_access_token,
                 "fields": "id,name,access_token,tasks"
             }
             pages_response = requests.get(pages_url, params=pages_params)
@@ -429,13 +434,12 @@ def oauth_callback_view(request):
             
             if not page_access_token:
                 raise requests.RequestException("no_page_access_token_in_response")
-            
-            access_token = page_access_token
+
             if settings.DEBUG:
-                print(f"[DEBUG] Using page access token for page {account_id}")
+                print(f"[DEBUG] Stored user token and page access token for page {account_id}")
 
         elif platform_name == "INSTAGRAM":
-            page_data = fetch_page_with_ig(access_token)
+            page_data = fetch_page_with_ig(user_access_token)
             if settings.DEBUG:
                 print(f"[DEBUG] fetch_page_with_ig result: {page_data}")
 
@@ -449,8 +453,6 @@ def oauth_callback_view(request):
             if not page_access_token:
                 raise requests.RequestException("no_page_access_token_in_response")
 
-            access_token = page_access_token
-
         # Normalize account values to avoid NULL inserts for fields that require strings
         account_id = account_id or ''
         account_username = account_username or platform_name.title()
@@ -462,7 +464,7 @@ def oauth_callback_view(request):
             defaults={
                 'account_username': account_username,
                 'account_id': account_id,
-                'access_token': access_token,
+                'access_token': user_access_token,
                 'page_access_token': page_access_token or '',
                 'instagram_business_account_id': instagram_business_account_id or '',
                 'token_expiry': token_expiry,
@@ -473,7 +475,7 @@ def oauth_callback_view(request):
         if not created:
             account.account_username = account_username
             account.account_id = account_id or account.account_id or ''
-            account.access_token = access_token
+            account.access_token = user_access_token
             account.page_access_token = page_access_token or account.page_access_token or ''
             account.instagram_business_account_id = instagram_business_account_id or account.instagram_business_account_id or ''
             account.token_expiry = token_expiry
@@ -775,6 +777,91 @@ def _serialize_post(post, request):
     }
 
 
+def _build_weekly_post_series(client):
+    today = timezone.localdate()
+    start_date = today - timedelta(days=6)
+
+    counts_by_day = {}
+    posts = Post.objects.filter(client=client, created_at__date__gte=start_date).order_by('created_at')
+    for post in posts:
+        post_day = timezone.localtime(post.created_at).date()
+        counts_by_day[post_day] = counts_by_day.get(post_day, 0) + 1
+
+    series = []
+    for offset in range(7):
+        current_day = start_date + timedelta(days=offset)
+        series.append({
+            'date': current_day.isoformat(),
+            'label': current_day.strftime('%a'),
+            'count': counts_by_day.get(current_day, 0),
+        })
+    return series
+
+
+def _build_client_analytics_payload(client):
+    connected_accounts = SocialMediaAccount.objects.filter(client=client, is_active=True).select_related('platform')
+    platform_analytics = []
+    platform_errors = []
+
+    total_audience = 0
+    recent_engagement_total = 0
+
+    for account in connected_accounts:
+        platform_name = account.platform.name.upper()
+        try:
+            if platform_name == 'INSTAGRAM':
+                analytics = fetch_instagram_account_analytics(account)
+                total_audience += analytics['metrics'].get('followers_count', 0)
+                recent_engagement_total += analytics['metrics'].get('recent_engagement_total', 0)
+                platform_analytics.append(analytics)
+            elif platform_name == 'FACEBOOK':
+                analytics = fetch_facebook_page_analytics(account)
+                total_audience += analytics['metrics'].get('followers_count', 0) or analytics['metrics'].get('fan_count', 0)
+                recent_engagement_total += analytics['metrics'].get('recent_engagement_total', 0)
+                platform_analytics.append(analytics)
+        except Exception as error:
+            platform_errors.append({
+                'platform': account.platform.name.lower(),
+                'message': str(error),
+            })
+
+    published_posts = Post.objects.filter(client=client, status='POSTED').count()
+    scheduled_posts = Post.objects.filter(client=client, status='SCHEDULED').count()
+    draft_posts = Post.objects.filter(client=client, status='DRAFT').count()
+
+    return {
+        'client_id': client.id,
+        'generated_at': timezone.now().isoformat(),
+        'overview': {
+            'total_audience': total_audience,
+            'recent_engagement_total': recent_engagement_total,
+            'published_posts': published_posts,
+            'scheduled_posts': scheduled_posts,
+            'draft_posts': draft_posts,
+            'connected_platforms': len(platform_analytics),
+        },
+        'weekly_posts': _build_weekly_post_series(client),
+        'platforms': platform_analytics,
+        'errors': platform_errors,
+    }
+
+
+@csrf_exempt
+def client_analytics_view(request):
+    if request.method != 'GET':
+        return JsonResponse({"error": "Method not allowed."}, status=405)
+
+    client = _resolve_client(request)
+    if not client:
+        return JsonResponse({"error": "No client found."}, status=400)
+
+    try:
+        payload = _build_client_analytics_payload(client)
+        return JsonResponse(payload, status=200)
+    except Exception as error:
+        return JsonResponse({"error": str(error)}, status=500)
+
+
 @csrf_exempt
 def posts_view(request):
     client = _resolve_client(request)
@@ -858,7 +945,7 @@ def fetch_page_with_ig(user_access_token):
     url = f"{GRAPH_API_BASE_URL}/me/accounts"
 
     params = {
-        "fields": "id,name,access_token,instagram_business_account",
+        "fields": "id,name,access_token,instagram_business_account,connected_instagram_account",
         "access_token": user_access_token,
     }
 
@@ -866,15 +953,40 @@ def fetch_page_with_ig(user_access_token):
     response.raise_for_status()
 
     pages = response.json().get("data", [])
+    if not pages:
+        raise ValueError("no_facebook_pages")
 
     for page in pages:
-        ig = page.get("instagram_business_account")
+        page_access_token = page.get("access_token") or user_access_token
+        ig = page.get("instagram_business_account") or page.get("connected_instagram_account")
 
         if ig and ig.get("id"):
             return {
                 "page_id": page["id"],
                 "page_name": page.get("name"),
-                "page_access_token": page["access_token"],
+                "page_access_token": page_access_token,
+                "instagram_business_account_id": ig["id"],
+            }
+
+        page_lookup = requests.get(
+            f"{GRAPH_API_BASE_URL}/{page['id']}",
+            params={
+                "fields": "id,name,instagram_business_account,connected_instagram_account",
+                "access_token": page_access_token,
+            },
+            timeout=30,
+        )
+
+        if page_lookup.status_code != 200:
+            continue
+
+        page_data = page_lookup.json()
+        ig = page_data.get("instagram_business_account") or page_data.get("connected_instagram_account")
+        if ig and ig.get("id"):
+            return {
+                "page_id": page["id"],
+                "page_name": page_data.get("name") or page.get("name"),
+                "page_access_token": page_access_token,
                 "instagram_business_account_id": ig["id"],
             }
 

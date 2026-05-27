@@ -18,7 +18,7 @@ from django.contrib import admin
 from django.urls import path
 from django.conf import settings
 from django.conf.urls.static import static
-from client.views import signup_view, login_view, get_platforms, posts_view, connected_platforms_view, oauth_initiate_view, oauth_callback_view, refresh_token_view
+from client.views import signup_view, login_view, get_platforms, posts_view, connected_platforms_view, oauth_initiate_view, oauth_callback_view, refresh_token_view, client_analytics_view
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -28,6 +28,7 @@ urlpatterns = [
     path('api/platforms/', get_platforms),
     path('api/connected-platforms/', connected_platforms_view),
     path('api/posts/', posts_view),
+    path('api/client-analytics/', client_analytics_view),
 
     # OAuth endpoints
     path('api/oauth/initiate/', oauth_initiate_view),

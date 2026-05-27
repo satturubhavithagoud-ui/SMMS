@@ -45,6 +45,38 @@ def _raise_for_status_with_body(response):
         raise requests.HTTPError(f'{error} - response body: {body}') from error
 
 
+def _graph_get(object_path, params):
+    response = requests.get(
+        f'{GRAPH_API_BASE_URL}/{object_path.lstrip("/")}',
+        params=params,
+        timeout=30,
+    )
+    _raise_for_status_with_body(response)
+    return response.json()
+
+
+def _account_tokens(account, prefer_page_token=False):
+    tokens = []
+    ordered_candidates = [
+        getattr(account, 'page_access_token', None),
+        getattr(account, 'access_token', None),
+    ]
+    if not prefer_page_token:
+        ordered_candidates.reverse()
+
+    for token in ordered_candidates:
+        if token and token not in tokens:
+            tokens.append(token)
+    return tokens
+
+
+def _coerce_int(value):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
 def publish_instagram_media(ig_user_id, image_url, caption, access_token):
     if not image_url:
         raise ValueError('Instagram publishing requires a public image URL.')
@@ -76,6 +108,158 @@ def publish_instagram_media(ig_user_id, image_url, caption, access_token):
     return publish_response.json()
 
 
+def fetch_instagram_account_analytics(account, media_limit=12):
+    access_token = next(iter(_account_tokens(account, prefer_page_token=True)), None)
+    account_id = getattr(account, 'instagram_business_account_id', None) or getattr(account, 'account_id', None)
+
+    if not access_token or not account_id:
+        raise ValueError('Instagram account missing access token or account ID.')
+
+    profile = _graph_get(
+        account_id,
+        {
+            'fields': 'id,username,followers_count,media_count',
+            'access_token': access_token,
+        },
+    )
+
+    media_response = _graph_get(
+        f'{account_id}/media',
+        {
+            'fields': 'id,caption,timestamp,media_type,permalink,like_count,comments_count',
+            'limit': str(media_limit),
+            'access_token': access_token,
+        },
+    )
+
+    recent_media = []
+    likes_total = 0
+    comments_total = 0
+
+    for item in media_response.get('data', []):
+        like_count = int(item.get('like_count') or 0)
+        comment_count = int(item.get('comments_count') or 0)
+        likes_total += like_count
+        comments_total += comment_count
+        recent_media.append({
+            'id': item.get('id'),
+            'caption': item.get('caption') or '',
+            'timestamp': item.get('timestamp'),
+            'media_type': item.get('media_type'),
+            'permalink': item.get('permalink'),
+            'like_count': like_count,
+            'comments_count': comment_count,
+            'engagement_total': like_count + comment_count,
+        })
+
+    return {
+        'platform': 'instagram',
+        'label': 'Instagram',
+        'account_name': profile.get('username') or getattr(account, 'account_username', ''),
+        'metrics': {
+            'followers_count': int(profile.get('followers_count') or 0),
+            'media_count': int(profile.get('media_count') or 0),
+            'recent_media_count': len(recent_media),
+            'recent_likes': likes_total,
+            'recent_comments': comments_total,
+            'recent_engagement_total': likes_total + comments_total,
+        },
+        'recent_media': recent_media,
+    }
+
+
+def fetch_facebook_page_analytics(account):
+    account_id = getattr(account, 'account_id', None)
+
+    access_tokens = _account_tokens(account, prefer_page_token=True)
+
+    if not access_tokens or not account_id:
+        raise ValueError('Facebook page missing access token or account ID.')
+
+    page = {}
+    followers_count = None
+    fan_count = None
+    for access_token in access_tokens:
+        page = _graph_get(
+            account_id,
+            {
+                'fields': 'id,name,link,followers_count,fan_count',
+                'access_token': access_token,
+            },
+        )
+        followers_count = page.get('followers_count')
+        fan_count = page.get('fan_count')
+        if followers_count is not None or fan_count is not None:
+            break
+
+    recent_media = []
+    recent_likes = 0
+    recent_comments = 0
+    warnings = []
+    posts_error = None
+
+    post_fields = (
+        'id,message,created_time,permalink_url,'
+        'reactions.summary(true).limit(0),comments.summary(true).limit(0)'
+    )
+    for access_token in access_tokens:
+        try:
+            posts_response = _graph_get(
+                f'{account_id}/posts',
+                {
+                    'fields': post_fields,
+                    'limit': '12',
+                    'access_token': access_token,
+                },
+            )
+            for item in posts_response.get('data', []):
+                reactions = _coerce_int(
+                    ((item.get('reactions') or {}).get('summary') or {}).get('total_count')
+                )
+                comments = _coerce_int(
+                    ((item.get('comments') or {}).get('summary') or {}).get('total_count')
+                )
+                recent_likes += reactions
+                recent_comments += comments
+                recent_media.append({
+                    'id': item.get('id'),
+                    'caption': item.get('message') or '',
+                    'timestamp': item.get('created_time'),
+                    'media_type': 'POST',
+                    'permalink': item.get('permalink_url'),
+                    'like_count': reactions,
+                    'comments_count': comments,
+                    'engagement_total': reactions + comments,
+                })
+            posts_error = None
+            break
+        except requests.HTTPError as error:
+            posts_error = error
+
+    if posts_error is not None:
+        warnings.append(
+            'Facebook post reactions are unavailable for this connection. '
+            'Meta returned a permission error for page post analytics.'
+        )
+
+    return {
+        'platform': 'facebook',
+        'label': 'Facebook',
+        'account_name': page.get('name') or getattr(account, 'account_username', ''),
+        'page_link': page.get('link'),
+        'metrics': {
+            'followers_count': _coerce_int(followers_count),
+            'fan_count': _coerce_int(fan_count),
+            'recent_media_count': len(recent_media),
+            'recent_likes': recent_likes,
+            'recent_comments': recent_comments,
+            'recent_engagement_total': recent_likes + recent_comments,
+        },
+        'recent_media': recent_media,
+        'warnings': warnings,
+    }
+
+
 def publish_social_post(post, platform_name, account, media_url=None):
     platform_name = platform_name.upper()
 
@@ -84,10 +268,10 @@ def publish_social_post(post, platform_name, account, media_url=None):
 
     if account is not None:
         if platform_name == 'INSTAGRAM':
-            access_token = getattr(account, 'page_access_token', None) or getattr(account, 'access_token', None)
+            access_token = next(iter(_account_tokens(account, prefer_page_token=True)), None)
             account_id = getattr(account, 'instagram_business_account_id', None)
         else:
-            access_token = getattr(account, 'access_token', None)
+            access_token = next(iter(_account_tokens(account, prefer_page_token=True)), None)
             account_id = getattr(account, 'account_id', None)
 
     if not access_token or not account_id:
