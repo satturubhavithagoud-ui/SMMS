@@ -18,8 +18,9 @@ export function getPlatforms() {
   return apiRequest("/platforms/");
 }
 
-export function getConnectedPlatforms() {
-  return apiRequest("/connected-platforms/");
+export function getConnectedPlatforms(clientId) {
+  const suffix = clientId ? `?client_id=${clientId}` : "";
+  return apiRequest(`/connected-platforms/${suffix}`);
 }
 
 export function connectPlatforms(data) {

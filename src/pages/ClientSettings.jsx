@@ -39,7 +39,7 @@ export default function ClientSettings() {
 
   useEffect(() => {
     loadPlatforms();
-  }, []);
+  }, [clientId]);
 
   useEffect(() => {
     const allowedOrigins = [window.location.origin, 'http://localhost:5174', 'http://127.0.0.1:5174'];
@@ -68,7 +68,7 @@ export default function ClientSettings() {
 
   async function loadPlatforms() {
     try {
-      const data = await getConnectedPlatforms();
+      const data = await getConnectedPlatforms(clientId);
       setPlatforms(data);
     } catch (error) {
       console.error('Unable to load connected platforms:', error);
