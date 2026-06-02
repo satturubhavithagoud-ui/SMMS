@@ -26,10 +26,7 @@ export default function ClientSettings() {
   const clientId = getClientId();
 
   const tabs = [
-    { id: 'general', label: 'General' },
-    { id: 'security', label: 'Security' },
-    { id: 'team', label: 'Team' },
-    { id: 'notifications', label: 'Notifications' },
+    { id: 'general', label: 'General' }
   ];
 
   const [platforms, setPlatforms] = useState([]);
@@ -149,9 +146,8 @@ export default function ClientSettings() {
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`pb-md text-on-surface-variant hover:text-primary transition-colors ${
-              activeTab === tab.id ? 'text-primary font-bold border-b-2 border-primary' : ''
-            }`}
+            className={`pb-md text-on-surface-variant hover:text-primary transition-colors ${activeTab === tab.id ? 'text-primary font-bold border-b-2 border-primary' : ''
+              }`}
           >
             {tab.label}
           </button>
@@ -210,9 +206,8 @@ export default function ClientSettings() {
                         key={platform.value}
                         type="button"
                         onClick={() => togglePlatform(platform.value)}
-                        className={`flex items-center gap-3 rounded-3xl border px-4 py-3 text-left transition-all ${
-                          isSelected ? 'border-primary bg-primary/10 text-primary' : 'border-outline-variant/50 bg-surface text-on-surface'
-                        }`}
+                        className={`flex items-center gap-3 rounded-3xl border px-4 py-3 text-left transition-all ${isSelected ? 'border-primary bg-primary/10 text-primary' : 'border-outline-variant/50 bg-surface text-on-surface'
+                          }`}
                       >
                         <div className="w-10 h-10 rounded-2xl flex items-center justify-center" style={{ backgroundColor: `${meta.color}1A` }}>
                           <span className="material-symbols-outlined text-lg" style={{ color: meta.color }}>{meta.icon}</span>
