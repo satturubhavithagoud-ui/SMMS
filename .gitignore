@@ -16,6 +16,10 @@ media/
 # VS Code
 .vscode/
 
+# Google Client Secrets
+*client_secret.json
+client_secret.json
+
 # OS files
 .DS_Store
 Thumbs.db

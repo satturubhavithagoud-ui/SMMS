@@ -39,7 +39,7 @@ SECRET_KEY = 'django-insecure-g!@tqgy$xt$mm7pfzxp%y^fi9bqt_+43$k02y6a=7w5jqkk-&w
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['127.0.0.1', 'localhost', "status-moistness-gray.ngrok-free.dev", "status-moistness-gray.ngrok-free.dev:8000"]
+ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '.ngrok-free.dev']
 
 
 # Application definition
@@ -145,10 +145,14 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5181",
     "http://127.0.0.1:5181",
+    "http://localhost:5174",
+    "http://127.0.0.1:5174",
 ]
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:5181",
     "http://127.0.0.1:5181",
+    "http://localhost:5174",
+    "http://127.0.0.1:5174",
 ]
 
 CORS_ALLOW_CREDENTIALS = True
@@ -172,12 +176,20 @@ FACEBOOK_REDIRECT_URI = os.environ.get(
 )
 INSTAGRAM_REDIRECT_URI = os.environ.get('INSTAGRAM_REDIRECT_URI', 'http://localhost:8000/api/oauth/callback/')
 FRONTEND_BASE_URL = os.environ.get('FRONTEND_BASE_URL', 'http://localhost:5181')
+PUBLIC_MEDIA_BASE_URL = os.environ.get('PUBLIC_MEDIA_BASE_URL', '')
+
+GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', '')
+GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET', '')
+GOOGLE_REDIRECT_URI = os.environ.get(
+    'GOOGLE_REDIRECT_URI',
+    'http://127.0.0.1:8000/api/oauth/callback/'
+)
 
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 
 #Celery Settings
-CELERY_BROKER_URL = 'redis://localhost:6379/0'
+CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://localhost:6379/0')
 
 CELERY_ACCEPT_CONTENT = ['json']
 
