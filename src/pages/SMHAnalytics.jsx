@@ -1,128 +1,308 @@
+import { useState, useEffect } from 'react';
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import SMHLayout from '../components/SMHLayout';
+import { apiRequest } from '../services/api';
+
+const PLATFORM_META = {
+  Instagram: { color: '#E1306C', icon: 'photo_camera' },
+  Facebook:  { color: '#1877F2', icon: 'thumb_up' },
+  LinkedIn:  { color: '#0A66C2', icon: 'business_center' },
+  'Twitter/X': { color: '#000000', icon: 'close' },
+  YouTube:   { color: '#FF0000', icon: 'play_circle' },
+  Pinterest: { color: '#BD081C', icon: 'push_pin' },
+};
+
+function fmtReach(n) {
+  if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+  if (n >= 1000) return (n / 1000).toFixed(0) + 'K';
+  return n;
+}
 
 export default function SMHAnalytics() {
+  const [activeFilter, setActiveFilter] = useState('30');
+  const [activeMetric, setActiveMetric] = useState('reach');
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
+
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadData() {
+      setLoading(true);
+      try {
+        const response = await apiRequest(`/smh/analytics/?days=${activeFilter}`);
+        setData(response);
+      } catch (err) {
+        console.error("Failed to load analytics", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadData();
+  }, [activeFilter]);
+
+  if (loading || !data) {
+    return (
+      <SMHLayout>
+        <main className="p-8 w-full min-h-screen bg-[#F6F5FA] flex items-center justify-center">
+          <div className="flex flex-col items-center">
+            <div className="animate-spin w-12 h-12 border-4 border-[#031B4E] border-t-transparent rounded-full mb-4"></div>
+            <p className="text-[#031B4E] font-bold">Loading Live Analytics...</p>
+          </div>
+        </main>
+      </SMHLayout>
+    );
+  }
+
+  const { kpi, platforms } = data;
+
+  // Highest reach platform
+  const topPlatform = [...platforms].sort((a, b) => b.reach - a.reach)[0];
+
+  // Pie data
+  const pieData = platforms.map(p => ({
+    name: p.name,
+    value: p.engagement,
+    color: PLATFORM_META[p.name].color,
+  }));
+
+  // Bar chart data
+  const barData = platforms.map(p => ({
+    name: p.name,
+    value: activeMetric === 'reach' ? p.reach
+         : activeMetric === 'engagement' ? p.engagement
+         : activeMetric === 'followers' ? p.followers
+         : p.posts,
+    color: PLATFORM_META[p.name].color,
+  }));
+
+  const metricLabel = activeMetric === 'reach' ? 'Reach'
+    : activeMetric === 'engagement' ? 'Engagement %'
+    : activeMetric === 'followers' ? 'Followers Gained'
+    : 'Posts Published';
+
   return (
     <SMHLayout>
-      <div>
-        {/* Header & Controls */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between mb-xl gap-md">
+      <main className="p-8 w-full min-h-screen bg-[#F6F5FA]">
+
+        {/* TOP BAR */}
+        <div className="flex justify-between items-center mb-8">
+          <div className="relative w-full max-w-2xl">
+            <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">search</span>
+            <input type="text" placeholder="Search analytics, campaigns, reports..." className="w-full bg-white border border-gray-200 rounded-2xl py-4 pl-14 pr-5 shadow-sm outline-none focus:border-[#031B4E]" />
+          </div>
+          <div className="flex items-center gap-5 ml-6">
+            <div className="relative">
+              <button onClick={() => setShowNotifications(!showNotifications)} className="relative w-11 h-11 flex items-center justify-center rounded-full hover:bg-gray-100 transition">
+                <span className="material-symbols-outlined text-[#031B4E]">notifications</span>
+                <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-orange-500 rounded-full border-2 border-white"></span>
+              </button>
+              {showNotifications && (
+                <div className="absolute right-0 mt-3 w-80 bg-white rounded-2xl shadow-xl border border-gray-100 p-5 z-50">
+                  <h3 className="font-bold text-lg text-[#031B4E] mb-4">Notifications</h3>
+                  <div className="space-y-3">
+                    <div className="bg-blue-50 border-l-4 border-blue-500 rounded-xl p-4"><h4 className="font-semibold text-blue-700">Reach Increased</h4><p className="text-sm text-blue-600 mt-1">Instagram campaign performance increased by 18%.</p></div>
+                    <div className="bg-green-50 border-l-4 border-green-500 rounded-xl p-4"><h4 className="font-semibold text-green-700">New Analytics Report</h4><p className="text-sm text-green-600 mt-1">Weekly analytics report is ready for export.</p></div>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="relative">
+              <button onClick={() => setShowProfile(!showProfile)} className="flex items-center gap-3 hover:bg-gray-100 px-3 py-2 rounded-2xl transition">
+                <div className="w-10 h-10 rounded-full bg-[#031B4E] text-white flex items-center justify-center font-bold text-sm">SR</div>
+                <div className="hidden sm:block text-left"><p className="font-semibold text-[#031B4E] text-sm">Sarah Rogers</p><p className="text-xs text-gray-400">SMH Manager</p></div>
+                <span className="material-symbols-outlined text-gray-400 text-[20px]">expand_more</span>
+              </button>
+              {showProfile && (
+                <div className="absolute right-0 mt-3 w-56 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden z-50">
+                  <div className="p-4 border-b"><p className="font-bold text-[#031B4E]">Sarah Rogers</p><p className="text-sm text-gray-400">sarahrogers@smh.com</p></div>
+                  <div className="py-2">
+                    <button className="w-full text-left px-4 py-3 hover:bg-gray-50 text-sm font-medium text-[#031B4E] flex items-center gap-3"><span className="material-symbols-outlined text-[18px]">person</span>Profile</button>
+                    <button className="w-full text-left px-4 py-3 hover:bg-red-50 text-sm font-medium text-red-500 flex items-center gap-3"><span className="material-symbols-outlined text-[18px]">logout</span>Logout</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* HEADER + FILTERS */}
+        <div className="flex justify-between items-end mb-8">
           <div>
-            <h1 className="font-headline-xl text-headline-xl text-primary mb-xs">Analytics</h1>
-            <p className="text-on-surface-variant font-body-md">Detailed performance insights across all managed accounts.</p>
+            <h1 className="text-[42px] font-bold text-[#031B4E]">Analytics</h1>
+            <p className="text-gray-500 text-lg mt-1">Detailed performance insights across all managed accounts.</p>
           </div>
-          <div className="flex items-center gap-md">
-            <div className="flex bg-surface-container-high rounded-lg p-xs">
-              <button className="px-md py-xs text-label-bold font-label-bold bg-surface-container-lowest text-primary rounded shadow-sm">Last 30 Days</button>
-              <button className="px-md py-xs text-label-bold font-label-bold text-on-surface-variant hover:text-primary">90 Days</button>
-              <button className="px-md py-xs text-label-bold font-label-bold text-on-surface-variant hover:text-primary">1 Year</button>
-            </div>
-            <button className="flex items-center gap-sm bg-primary text-on-primary px-lg py-sm rounded-lg font-label-bold text-label-bold hover:bg-primary-container transition-colors shadow-sm">
-              <span className="material-symbols-outlined text-[18px]">download</span>
-              Export Report
-            </button>
-          </div>
-        </div>
-
-        {/* Top Metrics Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-md mb-xl">
-          {[
-            { label: 'Total Engagement', value: '1.2M', trend: '+12%', isTrend: true },
-            { label: 'Reach', value: '5.4M', trend: '+8%', isTrend: true },
-            { label: 'Followers Growth', value: '+45K', icon: 'trending_up', isTrend: false },
-            { label: 'CTR', value: '3.4%', trend: 'Avg', isTrend: false },
-            { label: 'Published Posts', value: '128', icon: 'post_add', isTrend: false },
-          ].map((metric, idx) => (
-            <div key={idx} className="bg-surface-container-lowest p-lg rounded-xl shadow-sm border border-surface-container">
-              <div className="flex justify-between items-start mb-sm">
-                <span className="text-on-surface-variant font-label-bold text-label-bold">{metric.label}</span>
-                {metric.trend ? (
-                  <span className={`${metric.isTrend ? 'text-teal-600 bg-teal-50' : 'text-on-surface-variant opacity-50'} px-xs rounded text-[10px] font-bold`}>{metric.trend}</span>
-                ) : metric.icon ? (
-                  <span className={`material-symbols-outlined ${metric.label.includes('Growth') ? 'text-teal-600' : 'text-on-surface-variant'} text-[18px]`}>{metric.icon}</span>
-                ) : null}
-              </div>
-              <div className="font-stat-lg text-stat-lg text-primary">{metric.value}</div>
-            </div>
-          ))}
-        </div>
-
-        {/* Platforms Overview */}
-        <div className="bg-surface-container-lowest p-lg rounded-xl shadow-sm border border-surface-container mb-xl">
-          <h3 className="font-headline-md text-headline-md text-primary mb-lg">Connected Platforms Overview</h3>
-          <div className="space-y-lg py-md">
-            {[
-              { name: 'Instagram', value: 18, color: '#E1306C', icon: 'camera_alt', width: '75%' },
-              { name: 'Facebook', value: 12, color: '#1877F2', icon: 'facebook', width: '50%' },
-              { name: 'Twitter/X', value: 9, color: 'currentColor', icon: 'close', width: '37.5%' },
-              { name: 'LinkedIn', value: 7, color: '#0A66C2', icon: 'work', width: '29%' },
-              { name: 'YouTube', value: 5, color: '#FF0000', icon: 'play_circle', width: '21%' },
-              { name: 'Pinterest', value: 3, color: '#E60023', icon: 'push_pin', width: '12.5%' },
-            ].map((platform, idx) => (
-              <div key={idx} className="flex items-center gap-md">
-                <div className="w-32 flex items-center gap-sm">
-                  <span className="material-symbols-outlined" style={{ color: platform.color, fontVariationSettings: "'FILL' 1" }}>{platform.icon}</span>
-                  <span className="font-body-md text-primary font-semibold">{platform.name}</span>
-                </div>
-                <div className="flex-grow bg-surface-container-low h-8 rounded-full overflow-hidden">
-                  <div className="bg-primary h-full rounded-full transition-all duration-1000" style={{ width: platform.width }}></div>
-                </div>
-                <div className="w-12 text-right">
-                  <span className="font-stat-lg text-primary text-[20px]">{platform.value}</span>
-                </div>
-              </div>
+          <div className="flex bg-white border border-gray-200 rounded-2xl p-1 shadow-sm">
+            {[['30','Last 30 Days'],['90','90 Days'],['365','1 Year']].map(([val, label]) => (
+              <button key={val} onClick={() => setActiveFilter(val)}
+                className={`px-5 py-2.5 rounded-xl font-bold text-sm transition ${activeFilter === val ? 'bg-[#031B4E] text-white shadow' : 'text-gray-500 hover:text-[#031B4E]'}`}>
+                {label}
+              </button>
             ))}
           </div>
         </div>
 
-        {/* Best Performing Content */}
-        <div className="bg-surface-container-lowest rounded-xl shadow-sm border border-surface-container overflow-hidden">
-          <div className="p-lg border-b border-surface-container flex justify-between items-center">
-            <h3 className="font-headline-md text-headline-md text-primary">Best Performing Content</h3>
-            <button className="text-primary font-label-bold text-label-bold hover:underline flex items-center gap-xs">
-              View Full Content Library
-              <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
-            </button>
+        {/* KPI CARDS */}
+        <div className="grid grid-cols-2 xl:grid-cols-5 gap-5 mb-8">
+          {[
+            { label: 'Total Engagement', value: kpi.engagement, trend: '+12%', icon: 'favorite', color: 'text-pink-500', bg: 'bg-pink-50' },
+            { label: 'Reach',            value: kpi.reach,      trend: '+8%',  icon: 'visibility', color: 'text-blue-500', bg: 'bg-blue-50' },
+            { label: 'Followers Growth', value: kpi.followers,  trend: '+15%', icon: 'group_add', color: 'text-green-500', bg: 'bg-green-50' },
+            { label: 'CTR',              value: kpi.ctr,        trend: 'Avg',  icon: 'ads_click', color: 'text-purple-500', bg: 'bg-purple-50' },
+            { label: 'Published Posts',  value: kpi.posts,      trend: '+18',  icon: 'post_add', color: 'text-orange-500', bg: 'bg-orange-50' },
+          ].map((m, i) => (
+            <div key={i} className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
+              <div className="flex justify-between items-start mb-4">
+                <div className={`w-10 h-10 rounded-xl ${m.bg} flex items-center justify-center`}>
+                  <span className={`material-symbols-outlined text-[20px] ${m.color}`}>{m.icon}</span>
+                </div>
+                <span className="text-green-600 text-xs font-bold bg-green-50 px-2 py-1 rounded-full">{m.trend}</span>
+              </div>
+              <p className="text-gray-500 text-sm mb-1">{m.label}</p>
+              <h2 className="text-[32px] font-bold text-[#031B4E]">{m.value}</h2>
+            </div>
+          ))}
+        </div>
+
+        {/* HIGHEST REACH BANNER */}
+        <div className="bg-[#031B4E] rounded-3xl p-7 mb-8 flex items-center gap-6">
+          <div className="w-16 h-16 rounded-2xl flex items-center justify-center" style={{ backgroundColor: PLATFORM_META[topPlatform.name].color }}>
+            <span className="material-symbols-outlined text-white text-[30px]">{PLATFORM_META[topPlatform.name].icon}</span>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-surface-container-low">
-                  <th className="p-md font-label-bold text-label-bold text-on-surface-variant">Content Thumbnail</th>
-                  <th className="p-md font-label-bold text-label-bold text-on-surface-variant">Platform</th>
-                  <th className="p-md font-label-bold text-label-bold text-on-surface-variant">Eng. Rate</th>
-                  <th className="p-md font-label-bold text-label-bold text-on-surface-variant">Impressions</th>
-                  <th className="p-md font-label-bold text-label-bold text-on-surface-variant">Shares</th>
-                  <th className="p-md font-label-bold text-label-bold text-on-surface-variant">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-surface-container">
-                <tr className="hover:bg-surface-container-low/50 transition-colors">
-                  <td className="p-md">
-                    <div className="flex items-center gap-md">
-                      <div className="w-12 h-12 bg-surface-container rounded overflow-hidden">
-                        <img alt="Post Thumbnail" className="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA0ZxQEghkShOAVVgkrpR6i1R5gQRElCg-_mq_meE33eTRYoWUaJnmNRTsw9vgNkMaT235qO2RE6KUGK_qb8vh5TJZGsiHp9S6ObPomCy7F8CysLitpgj_xjFqWhCV9wxK6-QYYQxEdbSM_DPhyiGm6t0jl9trAq1ClRBD8G96IZtX_Zfh9RFRkKfZtncoN4D_agly3uHwtVS1HWvsDbgdoAUQaqtMm1YqUviTbRPN5Ox3VwfGiFDbAU9Qgwkseg8dKNQhereYG3zug" />
-                      </div>
-                      <span className="font-body-md text-primary font-semibold">Q4 Strategy Reveal</span>
-                    </div>
-                  </td>
-                  <td className="p-md">
-                    <div className="flex items-center gap-sm">
-                      <span className="material-symbols-outlined text-[#0A66C2]" style={{ fontVariationSettings: "'FILL' 1" }}>work</span>
-                      <span className="text-body-md">LinkedIn</span>
-                    </div>
-                  </td>
-                  <td className="p-md font-label-bold text-primary">8.4%</td>
-                  <td className="p-md text-body-md">245,000</td>
-                  <td className="p-md text-body-md">1,240</td>
-                  <td className="p-md">
-                    <span className="bg-teal-100 text-teal-800 px-sm py-xs rounded-full text-[10px] font-bold uppercase tracking-wider">Top Performing</span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+          <div className="flex-1">
+            <p className="text-white/60 text-sm font-semibold uppercase tracking-widest mb-1">🏆 Highest Reach Platform</p>
+            <h2 className="text-3xl font-bold text-white">{topPlatform.name}</h2>
+            <p className="text-white/60 text-sm mt-1">Reached <span className="text-white font-bold">{fmtReach(topPlatform.reach)}</span> people in the selected period</p>
+          </div>
+          <div className="hidden md:flex gap-8 text-center">
+            <div><p className="text-white/50 text-xs uppercase tracking-wide mb-1">Engagement</p><p className="text-2xl font-bold text-white">{topPlatform.engagement}%</p></div>
+            <div><p className="text-white/50 text-xs uppercase tracking-wide mb-1">Followers</p><p className="text-2xl font-bold text-white">{fmtReach(topPlatform.followers)}</p></div>
+            <div><p className="text-white/50 text-xs uppercase tracking-wide mb-1">Posts</p><p className="text-2xl font-bold text-white">{topPlatform.posts}</p></div>
           </div>
         </div>
-      </div>
+
+        {/* PIE + BAR */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+
+          {/* PIE CHART */}
+          <div className="bg-white rounded-3xl border border-gray-200 shadow-sm p-8">
+            <h2 className="text-2xl font-bold text-[#031B4E] mb-1">Platform Traffic Distribution</h2>
+            <p className="text-gray-500 text-sm mb-6">Engagement share across all connected platforms.</p>
+            <div className="h-[380px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={pieData} cx="50%" cy="50%" outerRadius={130} dataKey="value" label={({ name, value }) => `${name}: ${value}`}>
+                    {pieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                  </Pie>
+                  <Tooltip formatter={(v) => [`${v}%`, 'Engagement']} />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* BAR CHART */}
+          <div className="bg-white rounded-3xl border border-gray-200 shadow-sm p-8">
+            <div className="flex justify-between items-start mb-6">
+              <div>
+                <h2 className="text-2xl font-bold text-[#031B4E] mb-1">Platform Comparison</h2>
+                <p className="text-gray-500 text-sm">Compare platforms by key metric.</p>
+              </div>
+              <div className="flex bg-gray-100 rounded-xl p-1 gap-1">
+                {[['reach','Reach'],['engagement','Engage'],['followers','Followers'],['posts','Posts']].map(([val, label]) => (
+                  <button key={val} onClick={() => setActiveMetric(val)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${activeMetric === val ? 'bg-white shadow text-[#031B4E]' : 'text-gray-500'}`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="h-[340px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={barData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis dataKey="name" tick={{ fontSize: 11, fontWeight: 600 }} />
+                  <YAxis tick={{ fontSize: 11 }} tickFormatter={v => fmtReach(v)} />
+                  <Tooltip formatter={(v) => [fmtReach(v), metricLabel]} />
+                  <Bar dataKey="value" radius={[6, 6, 0, 0]}>
+                    {barData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+
+        {/* PLATFORM DETAIL TABLE */}
+        <div className="bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="px-8 py-6 border-b border-gray-100 flex justify-between items-center">
+            <h2 className="text-2xl font-bold text-[#031B4E]">Platform-by-Platform Breakdown</h2>
+            <span className="text-sm text-gray-400">{activeFilter === '30' ? 'Last 30 days' : activeFilter === '90' ? 'Last 90 days' : 'Last 1 year'}</span>
+          </div>
+          <table className="w-full">
+            <thead className="bg-[#F4F6FB]">
+              <tr>
+                {['Platform','Reach','Engagement','Followers Gained','Posts','Likes','Shares','Reach Share'].map(h => (
+                  <th key={h} className="px-6 py-4 text-left text-xs font-bold text-[#031B4E] uppercase tracking-wide">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {[...platforms].sort((a, b) => b.reach - a.reach).map((p, i) => {
+                const totalReach = platforms.reduce((s, x) => s + x.reach, 0);
+                const share = ((p.reach / totalReach) * 100).toFixed(1);
+                const isTop = i === 0;
+                return (
+                  <tr key={p.name} className={`border-t border-gray-100 ${isTop ? 'bg-yellow-50' : 'hover:bg-gray-50'} transition`}>
+                    <td className="px-6 py-5">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: PLATFORM_META[p.name].color + '20' }}>
+                          <span className="material-symbols-outlined text-[18px]" style={{ color: PLATFORM_META[p.name].color }}>{PLATFORM_META[p.name].icon}</span>
+                        </div>
+                        <span className="font-bold text-[#031B4E]">{p.name}</span>
+                        {isTop && <span className="text-xs bg-yellow-200 text-yellow-800 px-2 py-0.5 rounded-full font-bold">🏆 Top</span>}
+                      </div>
+                    </td>
+                    <td className="px-6 py-5 font-bold text-[#031B4E]">{fmtReach(p.reach)}</td>
+                    <td className="px-6 py-5">
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden w-20">
+                          <div className="h-full rounded-full" style={{ width: `${p.engagement}%`, backgroundColor: PLATFORM_META[p.name].color }} />
+                        </div>
+                        <span className="font-semibold text-[#031B4E] text-sm">{p.engagement}%</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-5 font-semibold text-[#031B4E]">+{fmtReach(p.followers)}</td>
+                    <td className="px-6 py-5 font-semibold text-[#031B4E]">{p.posts}</td>
+                    <td className="px-6 py-5">
+                      <div className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-pink-500 text-[16px]">favorite</span>
+                        <span className="font-semibold text-[#031B4E]">{p.likes}</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-5">
+                      <div className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-green-500 text-[16px]">share</span>
+                        <span className="font-semibold text-[#031B4E]">{p.shares}</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-5">
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden w-20">
+                          <div className="h-full rounded-full" style={{ width: `${share}%`, backgroundColor: PLATFORM_META[p.name].color }} />
+                        </div>
+                        <span className="font-semibold text-[#031B4E] text-sm">{share}%</span>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+      </main>
     </SMHLayout>
   );
 }

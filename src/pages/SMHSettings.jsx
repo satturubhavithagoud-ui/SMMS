@@ -1,138 +1,483 @@
-import SMHLayout from '../components/SMHLayout';
+import { useState, useEffect } from "react";
+import SMHLayout from "../components/SMHLayout";
+import { apiRequest } from "../services/api";
 
 export default function SMHSettings() {
+
+  const [activeTab, setActiveTab] = useState("General");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [dashboardStats, setDashboardStats] = useState({ scheduled_posts: 0, connected_platforms: 0 });
+
+  const [settings, setSettings] = useState({
+    workspace_name: "Content Manager",
+    timezone: "Asia/Kolkata",
+    theme_color: "#031B4E",
+    default_posting_time: "18:00",
+    ai_caption_style: "Professional",
+    default_platform: "Instagram"
+  });
+
+  const [loginAlerts, setLoginAlerts] = useState(true);
+  const [failedAlerts, setFailedAlerts] = useState(true);
+  const [scheduledAlerts, setScheduledAlerts] = useState(true);
+  const [clientActivity, setClientActivity] = useState(false);
+  const [campaignUpdates, setCampaignUpdates] = useState(true);
+  const [reportAlerts, setReportAlerts] = useState(false);
+
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const [dashRes, settingsRes] = await Promise.all([
+          apiRequest('/smh/dashboard/'),
+          apiRequest('/smh/settings/')
+        ]);
+        
+        if (dashRes && dashRes.stats) {
+            setDashboardStats({
+                scheduled_posts: dashRes.stats.scheduled_posts || 0,
+                connected_platforms: dashRes.stats.connected_accounts || 0
+            });
+        }
+        
+        if (settingsRes && !settingsRes.error) {
+            setSettings({
+                workspace_name: settingsRes.workspace_name || "Content Manager",
+                timezone: settingsRes.timezone || "Asia/Kolkata",
+                theme_color: settingsRes.theme_color || "#031B4E",
+                default_posting_time: settingsRes.default_posting_time || "18:00",
+                ai_caption_style: settingsRes.ai_caption_style || "Professional",
+                default_platform: settingsRes.default_platform || "Instagram"
+            });
+        }
+      } catch (err) {
+        console.error("Failed to load settings data", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadData();
+  }, []);
+
+  const handleSettingChange = (e) => {
+    const { name, value } = e.target;
+    setSettings(prev => ({ ...prev, [name]: value }));
+  };
+
+  const saveSettings = async () => {
+    setSaving(true);
+    try {
+        await apiRequest('/smh/settings/', {
+            method: 'PUT',
+            body: JSON.stringify(settings)
+        });
+        alert('Settings saved successfully!');
+    } catch (err) {
+        console.error("Failed to save settings", err);
+        alert('Failed to save settings.');
+    } finally {
+        setSaving(false);
+    }
+  };
+
+  const tabs = [
+    "General",
+    "Notifications",
+  ];
+
   return (
+
     <SMHLayout>
-      <main className="p-xl max-w-7xl mx-auto">
-        <header className="mb-xl">
-          <h2 className="font-headline-xl text-headline-xl text-primary font-bold">Settings</h2>
-          <p className="text-on-surface-variant text-body-md">Manage your agency workspace, team, and billing.</p>
-        </header>
 
-        <div className="flex border-b border-outline-variant mb-xl gap-xl">
-          <button className="pb-md text-primary font-bold border-b-2 border-primary">General</button>
-          <button className="pb-md text-on-surface-variant hover:text-primary transition-colors">Security</button>
-          <button className="pb-md text-on-surface-variant hover:text-primary transition-colors">Team</button>
-          <button className="pb-md text-on-surface-variant hover:text-primary transition-colors">Integrations</button>
-          <button className="pb-md text-on-surface-variant hover:text-primary transition-colors">Billing</button>
+      <div className="p-8 bg-[#F6F5FA] min-h-screen">
+
+        {/* PAGE HEADER */}
+
+        <div className="mb-8">
+
+          <h1 className="text-5xl font-bold text-[#031B4E] mb-3">
+            Settings
+          </h1>
+
+          <p className="text-gray-500 text-lg">
+            Manage your Social Media Handler workspace settings.
+          </p>
+
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-xl">
-          <div className="lg:col-span-8 space-y-xl">
-            {/* Profile Settings */}
-            <section className="bg-surface-container-lowest rounded-xl p-lg border border-outline-variant shadow-sm">
-              <div className="flex items-center justify-between mb-lg">
-                <h3 className="font-headline-md text-headline-md text-on-surface">Profile Settings</h3>
-                <span className="material-symbols-outlined text-primary/40">person</span>
-              </div>
-              <div className="flex items-start gap-xl">
-                <div className="relative group cursor-pointer shrink-0">
-                  <img alt="Upload" className="w-24 h-24 rounded-xl object-cover ring-4 ring-surface-container shadow-md" src="https://lh3.googleusercontent.com/aida/ADBb0uiyDTxLulY7CukQTwM8-mLnxlzTnvYp78oUmWUPR5uaFksQWMfwL70VtiAXNX1Uzv_mxHse1c8WC7hRBMvwF-1DE3f07HnEko_0OjSmydCstYlKTwezwb7_0ylf3nmseUbLWIHIhKbIwflmxmct8nAC048wtTXy0HhXMZ9X295R9JaiDpMNeOC-Ipfi2IavvXFEKobHqNIITZC-GE7ccMNboECUFRQG4mh_l17AFzBd3UkltNJ393TSv93buaRTE5EJ6wbYTjv2ByY" />
-                  <div className="absolute inset-0 bg-primary/40 rounded-xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                    <span className="material-symbols-outlined text-on-primary">photo_camera</span>
-                  </div>
-                </div>
-                <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-md">
-                  <div className="space-y-xs">
-                    <label className="font-label-bold text-label-bold text-on-surface-variant">Full Name</label>
-                    <input className="w-full border-outline-variant border rounded-lg bg-surface focus:border-primary focus:ring-1 focus:ring-primary py-sm px-md text-body-md" type="text" defaultValue="Alex Chen" />
-                  </div>
-                  <div className="space-y-xs">
-                    <label className="font-label-bold text-label-bold text-on-surface-variant">Email Address</label>
-                    <input className="w-full border-outline-variant border rounded-lg bg-surface focus:border-primary focus:ring-1 focus:ring-primary py-sm px-md text-body-md" type="email" defaultValue="alex@socialpro.io" />
-                  </div>
-                  <div className="md:col-span-2 space-y-xs">
-                    <label className="font-label-bold text-label-bold text-on-surface-variant">Bio</label>
-                    <textarea className="w-full border-outline-variant border rounded-lg bg-surface focus:border-primary focus:ring-1 focus:ring-primary py-sm px-md text-body-md resize-none" rows="3" defaultValue="Senior Growth Manager and Social Strategy Lead. Passionate about data-driven engagement and AI-powered storytelling."></textarea>
-                  </div>
-                </div>
-              </div>
-            </section>
+        {/* SETTINGS TABS */}
 
-            {/* Team Management */}
-            <section className="bg-surface-container-lowest rounded-xl p-lg border border-outline-variant shadow-sm">
-              <div className="flex items-center justify-between mb-lg">
-                <div>
-                  <h3 className="font-headline-md text-headline-md text-on-surface">Team Management</h3>
-                  <p className="text-body-md text-on-surface-variant">Manage your agency members and their access levels.</p>
-                </div>
-                <button className="bg-primary text-on-primary px-lg py-sm rounded-lg font-label-bold flex items-center gap-sm">
-                  <span className="material-symbols-outlined text-[18px]">add</span>
-                  Invite Member
-                </button>
-              </div>
-              <div className="space-y-md">
-                {[
-                  { name: 'Jordan Day', email: 'jordan@agency.com', role: 'Content Creator', initials: 'JD', color: 'bg-primary-fixed-dim text-primary' },
-                  { name: 'Maria Lopez', email: 'm.lopez@agency.com', role: 'Strategist', initials: 'ML', color: 'bg-tertiary-fixed-dim text-tertiary' },
-                ].map((m, i) => (
-                  <div key={i} className="flex items-center justify-between p-sm hover:bg-surface-container-low/40 rounded-xl transition-colors border border-transparent hover:border-outline-variant">
-                    <div className="flex items-center gap-md">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${m.color}`}>{m.initials}</div>
-                      <div>
-                        <p className="font-label-bold text-on-surface">{m.name}</p>
-                        <p className="text-body-md text-on-surface-variant">{m.email}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-xl">
-                      <span className="px-md py-xs bg-secondary-container text-on-secondary-container text-[11px] font-bold rounded-full uppercase tracking-wider">{m.role}</span>
-                      <button className="text-on-surface-variant hover:text-error transition-colors">
-                        <span className="material-symbols-outlined">more_vert</span>
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
+        <div className="mb-10">
+
+          <div className="bg-white rounded-full shadow-sm border border-gray-200 p-2 inline-flex gap-2 flex-wrap">
+
+            {tabs.map((tab, index) => (
+
+              <button
+                key={index}
+                onClick={() => setActiveTab(tab)}
+                className={`px-7 py-3 rounded-full text-sm font-semibold transition-all ${
+                  activeTab === tab
+                    ? "bg-[#031B4E] text-white shadow-sm"
+                    : "text-gray-500 hover:bg-gray-100"
+                }`}
+              >
+
+                {tab}
+
+              </button>
+
+            ))}
+
           </div>
 
-          <div className="lg:col-span-4 space-y-xl">
-            {/* Subscription Card */}
-            <section className="bg-primary text-on-primary rounded-xl overflow-hidden shadow-lg">
-              <div className="p-lg">
-                <div className="flex justify-between items-start mb-lg">
+        </div>
+
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-20">
+            <div className="animate-spin w-10 h-10 border-4 border-[#031B4E] border-t-transparent rounded-full mb-4"></div>
+            <p className="text-[#031B4E] font-bold">Loading Settings...</p>
+          </div>
+        ) : (
+          <>
+            {/* =========================
+                GENERAL TAB
+            ========================= */}
+
+            {activeTab === "General" && (
+
+          <div className="space-y-8">
+
+            {/* OVERVIEW CARDS */}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+              {/* TOTAL POSTS */}
+
+              <div className="bg-white rounded-3xl border border-gray-200 p-8 shadow-sm">
+
+                <div className="flex items-center justify-between">
+
                   <div>
-                    <p className="font-label-bold text-on-primary/60 uppercase tracking-widest text-[10px]">Current Plan</p>
-                    <h4 className="font-headline-md text-headline-md">Agency Elite</h4>
-                  </div>
-                  <span className="px-md py-xs bg-primary-fixed text-primary text-[10px] font-bold rounded-full">ACTIVE</span>
-                </div>
-                <div className="space-y-md mb-lg">
-                  <div className="flex items-center justify-between">
-                    <span className="text-on-primary/70 text-body-md">Next billing:</span>
-                    <span className="font-bold">Oct 24, 2024</span>
-                  </div>
-                </div>
-                <button className="w-full bg-on-primary text-primary py-sm rounded-lg font-bold transition-transform active:scale-95">Manage Billing</button>
-              </div>
-            </section>
 
-            {/* Notifications */}
-            <section className="bg-surface-container-lowest rounded-xl p-lg border border-outline-variant shadow-sm">
-              <h3 className="font-headline-md text-headline-md text-on-surface mb-lg">Notifications</h3>
-              <div className="space-y-md">
-                {[
-                  { label: 'Email Notifications', active: true },
-                  { label: 'Push Notifications', active: false },
-                  { label: 'Weekly Reports', active: true },
-                ].map((n, i) => (
-                  <div key={i} className="flex items-center justify-between">
-                    <span className="text-body-md text-on-surface-variant">{n.label}</span>
-                    <button className={`relative inline-flex h-5 w-10 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${n.active ? 'bg-primary' : 'bg-surface-container-highest'}`}>
-                      <span className={`${n.active ? 'translate-x-5' : 'translate-x-0'} pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}></span>
-                    </button>
+                    <p className="text-gray-500 text-sm mb-2">
+                      Total Scheduled Posts
+                    </p>
+
+                    <h2 className="text-5xl font-bold text-[#031B4E]">
+                      {dashboardStats.scheduled_posts}
+                    </h2>
+
                   </div>
-                ))}
+
+                  <div className="w-20 h-20 rounded-3xl bg-blue-100 flex items-center justify-center">
+
+                    <span className="material-symbols-outlined text-[#031B4E] text-4xl">
+                      post_add
+                    </span>
+
+                  </div>
+
+                </div>
+
               </div>
-            </section>
+
+              {/* TOTAL PLATFORMS */}
+
+              <div className="bg-white rounded-3xl border border-gray-200 p-8 shadow-sm">
+
+                <div className="flex items-center justify-between">
+
+                  <div>
+
+                    <p className="text-gray-500 text-sm mb-2">
+                      Connected Platforms
+                    </p>
+
+                    <h2 className="text-5xl font-bold text-[#031B4E]">
+                      {dashboardStats.connected_platforms}
+                    </h2>
+
+                  </div>
+
+                  <div className="w-20 h-20 rounded-3xl bg-green-100 flex items-center justify-center">
+
+                    <span className="material-symbols-outlined text-green-700 text-4xl">
+                      hub
+                    </span>
+
+                  </div>
+
+                </div>
+
+              </div>
+
+            </div>
+
+            {/* WORKSPACE SETTINGS */}
+
+            <div className="bg-white rounded-3xl border border-gray-200 p-8 shadow-sm">
+
+              <div className="flex justify-between items-center mb-8">
+
+                <div>
+
+                  <h2 className="text-3xl font-bold text-[#031B4E] mb-2">
+                    Workspace Settings
+                  </h2>
+
+                  <p className="text-gray-500">
+                    Configure your SMH workspace and posting preferences.
+                  </p>
+
+                </div>
+
+                <button 
+                  onClick={saveSettings} 
+                  disabled={saving}
+                  className={`bg-[#031B4E] text-white px-8 py-3 rounded-xl font-semibold hover:bg-blue-900 transition-colors ${saving ? 'opacity-70' : ''}`}
+                >
+                  {saving ? 'Saving...' : 'Save Settings'}
+                </button>
+
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                {/* WORKSPACE NAME */}
+
+                <div>
+
+                  <label className="block text-sm font-semibold mb-2 text-[#031B4E]">
+                    Workspace Name
+                  </label>
+
+                  <input
+                    type="text"
+                    name="workspace_name"
+                    value={settings.workspace_name}
+                    onChange={handleSettingChange}
+                    className="w-full h-14 px-5 rounded-2xl border border-gray-300 outline-none"
+                  />
+
+                </div>
+
+                {/* TIMEZONE */}
+
+                <div>
+
+                  <label className="block text-sm font-semibold mb-2 text-[#031B4E]">
+                    Timezone
+                  </label>
+
+                  <select 
+                    name="timezone"
+                    value={settings.timezone}
+                    onChange={handleSettingChange}
+                    className="w-full h-14 px-5 rounded-2xl border border-gray-300 outline-none"
+                  >
+
+                    <option value="Asia/Kolkata">Asia/Kolkata</option>
+                    <option value="UTC">UTC</option>
+                    <option value="America/New_York">America/New_York</option>
+
+                  </select>
+
+                </div>
+
+                {/* THEME COLOR */}
+
+                <div>
+
+                  <label className="block text-sm font-semibold mb-2 text-[#031B4E]">
+                    Brand Theme Color
+                  </label>
+
+                  <input
+                    type="color"
+                    name="theme_color"
+                    value={settings.theme_color}
+                    onChange={handleSettingChange}
+                    className="w-full h-14 rounded-2xl border border-gray-300"
+                  />
+
+                </div>
+
+                {/* DEFAULT POSTING TIME */}
+
+                <div>
+
+                  <label className="block text-sm font-semibold mb-2 text-[#031B4E]">
+                    Default Posting Time
+                  </label>
+
+                  <input
+                    type="time"
+                    name="default_posting_time"
+                    value={settings.default_posting_time}
+                    onChange={handleSettingChange}
+                    className="w-full h-14 px-5 rounded-2xl border border-gray-300 outline-none"
+                  />
+
+                </div>
+
+                {/* AI CAPTION STYLE */}
+
+                <div>
+
+                  <label className="block text-sm font-semibold mb-2 text-[#031B4E]">
+                    AI Caption Style
+                  </label>
+
+                  <select 
+                    name="ai_caption_style"
+                    value={settings.ai_caption_style}
+                    onChange={handleSettingChange}
+                    className="w-full h-14 px-5 rounded-2xl border border-gray-300 outline-none"
+                  >
+
+                    <option value="Professional">Professional</option>
+                    <option value="Friendly">Friendly</option>
+                    <option value="Luxury">Luxury</option>
+                    <option value="Creative">Creative</option>
+
+                  </select>
+
+                </div>
+
+                {/* DEFAULT PLATFORM */}
+
+                <div>
+
+                  <label className="block text-sm font-semibold mb-2 text-[#031B4E]">
+                    Default Posting Platform
+                  </label>
+
+                  <select 
+                    name="default_platform"
+                    value={settings.default_platform}
+                    onChange={handleSettingChange}
+                    className="w-full h-14 px-5 rounded-2xl border border-gray-300 outline-none"
+                  >
+
+                    <option value="Instagram">Instagram</option>
+                    <option value="Facebook">Facebook</option>
+                    <option value="LinkedIn">LinkedIn</option>
+                    <option value="YouTube">YouTube</option>
+
+                  </select>
+
+                </div>
+
+              </div>
+
+            </div>
+
           </div>
-        </div>
 
-        <footer className="mt-xl pt-lg border-t border-outline-variant flex justify-end gap-md">
-          <button className="px-xl py-md text-on-surface-variant font-label-bold hover:text-primary transition-colors">Discard Changes</button>
-          <button className="px-xl py-md bg-primary text-on-primary rounded-xl font-label-bold shadow-md hover:opacity-95 transition-all active:scale-95">Save & Update Profile</button>
-        </footer>
-      </main>
+        )}
+
+        {/* =========================
+            NOTIFICATIONS TAB
+        ========================= */}
+
+        {activeTab === "Notifications" && (
+
+          <div className="bg-white rounded-3xl border border-gray-200 p-8 shadow-sm">
+
+            <h2 className="text-3xl font-bold text-[#031B4E] mb-8">
+              Notification Settings
+            </h2>
+
+            <div className="space-y-5">
+
+              {[
+                {
+                  title: "Client Login Alerts",
+                  state: loginAlerts,
+                  setter: setLoginAlerts,
+                },
+
+                {
+                  title: "Failed Post Alerts",
+                  state: failedAlerts,
+                  setter: setFailedAlerts,
+                },
+
+                {
+                  title: "Scheduled Post Alerts",
+                  state: scheduledAlerts,
+                  setter: setScheduledAlerts,
+                },
+
+                {
+                  title: "Client Activity Updates",
+                  state: clientActivity,
+                  setter: setClientActivity,
+                },
+
+                {
+                  title: "Campaign Status Updates",
+                  state: campaignUpdates,
+                  setter: setCampaignUpdates,
+                },
+
+                {
+                  title: "Weekly Report Notifications",
+                  state: reportAlerts,
+                  setter: setReportAlerts,
+                },
+
+              ].map((item, index) => (
+
+                <div
+                  key={index}
+                  className="flex justify-between items-center border border-gray-200 rounded-2xl px-6 py-5"
+                >
+
+                  <div>
+
+                    <h3 className="font-medium text-[#031B4E]">
+                      {item.title}
+                    </h3>
+
+                    <p className="text-sm text-gray-500 mt-1">
+                      Receive notifications related to {item.title.toLowerCase()}.
+                    </p>
+
+                  </div>
+
+                  <button
+                    onClick={() =>
+                      item.setter(!item.state)
+                    }
+                    className={`w-14 h-8 rounded-full flex items-center px-1 transition-all ${
+                      item.state
+                        ? "bg-[#031B4E] justify-end"
+                        : "bg-gray-300 justify-start"
+                    }`}
+                  >
+
+                    <div className="w-6 h-6 bg-white rounded-full"></div>
+
+                  </button>
+
+                </div>
+
+              ))}
+
+            </div>
+
+          </div>
+
+        )}
+          </>
+        )}
+
+      </div>
+
     </SMHLayout>
+
   );
+
 }

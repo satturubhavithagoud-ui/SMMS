@@ -1,3 +1,18 @@
+const CHART_BARS = [
+  { height: 92, views: '8.9k' },
+  { height: 56, views: '3.7k' },
+  { height: 78, views: '6.1k' },
+  { height: 44, views: '2.8k' },
+  { height: 88, views: '7.4k' },
+  { height: 64, views: '4.2k' },
+  { height: 97, views: '9.1k' },
+  { height: 72, views: '5.3k' },
+  { height: 60, views: '4.0k' },
+  { height: 84, views: '6.8k' },
+  { height: 48, views: '3.1k' },
+  { height: 90, views: '8.2k' },
+];
+
 export default function Analytics() {
   const stats = [
     { label: 'Total Engagement', value: '142.5k', change: '+18.4%', trend: 'up' },
@@ -36,10 +51,10 @@ export default function Analytics() {
 
       <div className="bg-surface-container-lowest p-xl rounded-xl border border-surface-variant shadow-sm min-h-[400px] flex flex-col items-center justify-center text-center gap-md">
         <div className="w-full h-64 flex items-end justify-between gap-2 px-xl mb-md">
-          {Array.from({ length: 12 }).map((_, i) => (
-            <div key={i} className="flex-1 bg-primary/10 rounded-t-lg group relative cursor-pointer hover:bg-primary/30 transition-colors" style={{ height: `${20 + Math.random() * 80}%` }}>
+          {CHART_BARS.map((bar, i) => (
+            <div key={i} className="flex-1 bg-primary/10 rounded-t-lg group relative cursor-pointer hover:bg-primary/30 transition-colors" style={{ height: `${bar.height}%` }}>
               <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-primary text-on-primary text-[10px] px-sm py-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                {(Math.random() * 10).toFixed(1)}k Views
+                {bar.views} Views
               </div>
             </div>
           ))}

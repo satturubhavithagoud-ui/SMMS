@@ -25,7 +25,7 @@ export default function Sidebar() {
           SR
         </div>
         <div className="overflow-hidden">
-          <p className="font-label-bold text-label-bold text-on-primary truncate">SocialManager Pro</p>
+          <p className="font-label-bold text-label-bold text-on-primary truncate">Content Manager</p>
           <p className="text-[10px] text-on-primary/60 uppercase tracking-tight">Agency Account</p>
         </div>
       </div>

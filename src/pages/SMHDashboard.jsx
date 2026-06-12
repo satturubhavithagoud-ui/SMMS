@@ -1,151 +1,265 @@
+import { useState, useEffect } from 'react';
 import SMHLayout from '../components/SMHLayout';
-import { Link } from 'react-router-dom';
+import { apiRequest } from '../services/api';
 
 export default function SMHDashboard() {
+
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState([
+    { title: 'Active clients', value: '—', growth: '', icon: 'groups' },
+    { title: 'Posts published today', value: '—', growth: '', icon: 'send' },
+    { title: 'Posts scheduled', value: '—', growth: '', icon: 'calendar_month' },
+    { title: 'Total reach', value: '—', growth: '', icon: 'visibility' },
+  ]);
+  const [chartData, setChartData] = useState([70, 55, 90, 65, 80, 30, 40]);
+  const [chartScheduled, setChartScheduled] = useState([60, 60, 60, 60, 60, 60, 60]);
+  const [alerts, setAlerts] = useState([]);
+
+  useEffect(() => {
+    async function loadDashboard() {
+      try {
+        const data = await apiRequest('/smh/dashboard/');
+        const s = data.stats || {};
+
+        setStats([
+          {
+            title: 'Active clients',
+            value: String(s.active_clients ?? 0),
+            growth: s.total_clients ? `${s.active_clients} of ${s.total_clients}` : '',
+            icon: 'groups',
+          },
+          {
+            title: 'Posts published today',
+            value: String(s.posted_today ?? 0),
+            growth: s.total_posts ? `${s.total_posts} total` : '',
+            icon: 'send',
+          },
+          {
+            title: 'Posts scheduled',
+            value: String(s.scheduled_posts ?? 0),
+            growth: s.draft_posts ? `+${s.draft_posts} drafts` : '',
+            icon: 'calendar_month',
+          },
+          {
+            title: 'Total reach',
+            value: String(s.connected_accounts ?? 0),
+            growth: `${(data.platform_breakdown || []).length} platforms`,
+            icon: 'visibility',
+          },
+        ]);
+
+        // Weekly chart
+        const weekly = data.weekly_chart || [];
+        if (weekly.length > 0) {
+          // Coerce missing values to 0 to avoid NaN in Math operations
+          const maxVal = Math.max(...weekly.map(d => Math.max(d?.published ?? 0, d?.scheduled ?? 0, d?.created ?? 0, 1)));
+          const scale = 100 / (maxVal || 1);
+          setChartData(weekly.map(d => Math.max((Number(d?.published ?? 0) || 0) * scale, 10)));
+          setChartScheduled(weekly.map(d => Math.max((Number(d?.scheduled ?? 0) || 0) * scale, 10)));
+        }
+
+        // Alerts
+        const alertItems = data.alerts || [];
+        setAlerts(alertItems);
+
+      } catch (err) {
+        console.error('Dashboard load error:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadDashboard();
+  }, []);
+
+  const todayStr = new Date().toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+
   return (
+
     <SMHLayout>
-      <div className="space-y-xl">
-        <header className="mb-xl">
-          <h1 className="font-headline-md text-on-surface">Handler overview</h1>
-          <p className="text-on-surface-variant text-label-bold">All clients and platform activity — May 6, 2026</p>
-        </header>
 
-        {/* Top Level Analytics */}
-        <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-lg">
-          {[
-            { label: 'Active clients', value: '8', trend: '12%', icon: 'groups' },
-            { label: 'Posts published today', value: '34', trend: '5%', icon: 'send' },
-            { label: 'Posts scheduled', value: '47', trend: '8', icon: 'event', isAdd: true },
-            { label: 'Total reach', value: '2.1M', trend: '24%', icon: 'visibility' },
-          ].map(stat => (
-            <div key={stat.label} className="bg-surface-container-lowest p-lg rounded-xl shadow-sm border border-surface-container-high">
-              <div className="flex justify-between items-start mb-md">
-                <p className="text-on-surface-variant font-label-bold">{stat.label}</p>
-                <span className="p-xs bg-primary/5 rounded-lg text-primary">
-                  <span className="material-symbols-outlined text-[20px]">{stat.icon}</span>
-                </span>
-              </div>
-              <div className="flex items-baseline gap-sm">
-                <span className="font-stat-lg text-stat-lg text-on-background">{stat.value}</span>
-                <span className="text-emerald-600 font-label-bold text-xs flex items-center gap-[2px]">
-                  <span className="material-symbols-outlined text-[14px]">{stat.isAdd ? 'add' : 'trending_up'}</span>
-                  {stat.trend}
-                </span>
-              </div>
-            </div>
-          ))}
-        </section>
+      {/* HEADER */}
+      <div className="mb-10">
 
-        {/* Publishing Analytics & Alerts */}
-        <section className="grid grid-cols-1 lg:grid-cols-3 gap-lg">
-          <div className="lg:col-span-2 bg-surface-container-lowest p-lg rounded-xl shadow-sm border border-surface-container-high">
-            <div className="flex justify-between items-center mb-xl">
-              <h2 className="font-headline-md text-on-surface">Posts published vs scheduled — last 7 days</h2>
-              <div className="flex items-center gap-md">
-                <div className="flex items-center gap-xs">
-                  <span className="w-3 h-3 rounded-sm bg-primary"></span>
-                  <span className="text-label-bold text-on-surface-variant">Published</span>
-                </div>
-                <div className="flex items-center gap-xs">
-                  <span className="w-3 h-3 rounded-sm bg-primary-fixed-dim"></span>
-                  <span className="text-label-bold text-on-surface-variant">Scheduled</span>
-                </div>
-              </div>
-            </div>
-            <div className="h-[240px] flex items-end justify-between px-md gap-sm">
-              {[
-                { day: 'Mon', p: 40, s: 30 },
-                { day: 'Tue', p: 25, s: 45 },
-                { day: 'Wed', p: 60, s: 20 },
-                { day: 'Thu', p: 35, s: 55 },
-                { day: 'Fri', p: 50, s: 40 },
-                { day: 'Sat', p: 10, s: 15 },
-                { day: 'Sun', p: 15, s: 25 },
-              ].map(d => (
-                <div key={d.day} className="flex-1 flex flex-col justify-end gap-xs h-full">
-                  <div className="bg-primary-fixed-dim rounded-t w-full" style={{ height: `${d.s}%` }}></div>
-                  <div className="bg-primary rounded-t w-full" style={{ height: `${d.p}%` }}></div>
-                  <span className="text-[10px] text-center mt-xs text-outline uppercase font-bold">{d.day}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="bg-surface-container-lowest p-lg rounded-xl shadow-sm border border-surface-container-high">
-            <h2 className="font-headline-md text-on-surface mb-lg">Alerts & notifications</h2>
-            <div className="space-y-md">
-              <div className="p-md bg-orange-50 border-l-4 border-orange-400 rounded-lg flex gap-md items-start">
-                <span className="material-symbols-outlined text-orange-600">warning</span>
-                <div>
-                  <p className="text-body-md font-bold text-orange-900">API Token Expiring</p>
-                  <p className="text-xs text-orange-800">Instagram token for 'Luxe Hotels' expires in 2 days.</p>
-                </div>
-              </div>
-              <div className="p-md bg-blue-50 border-l-4 border-blue-400 rounded-lg flex gap-md items-start">
-                <span className="material-symbols-outlined text-blue-600">info</span>
-                <div>
-                  <p className="text-body-md font-bold text-blue-900">New Campaign</p>
-                  <p className="text-xs text-blue-800">'TechNova' added 12 new assets to the library.</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
+        <h1 className="text-5xl font-bold text-[#031B4E] mb-3">
+          Handler Overview
+        </h1>
 
-        {/* Client Roster */}
-        <section className="bg-surface-container-lowest p-lg rounded-xl shadow-sm border border-surface-container-high overflow-hidden">
-          <div className="flex justify-between items-center mb-xl">
-            <h2 className="font-headline-md text-on-surface">Client roster — platforms & reach</h2>
-            <Link to="/smh-clients" className="text-primary font-label-bold flex items-center gap-xs hover:underline">
-              Manage clients <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
-            </Link>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-surface-variant">
-                  <th className="pb-md font-label-bold text-outline uppercase tracking-wider text-[10px]">Client Name</th>
-                  <th className="pb-md font-label-bold text-outline uppercase tracking-wider text-[10px]">Plan</th>
-                  <th className="pb-md font-label-bold text-outline uppercase tracking-wider text-[10px]">Platforms</th>
-                  <th className="pb-md font-label-bold text-outline uppercase tracking-wider text-[10px]">Status</th>
-                  <th className="pb-md font-label-bold text-outline uppercase tracking-wider text-[10px]">Weekly Posts</th>
-                  <th className="pb-md"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-surface-variant">
-                <tr className="hover:bg-surface-container-low/50 transition-colors">
-                  <td className="py-lg">
-                    <div className="flex items-center gap-md">
-                      <div className="w-10 h-10 rounded-lg bg-surface-container-high overflow-hidden">
-                        <img alt="Luxe Hotels Group" className="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida/ADBb0ujKwsanRkXbzZCQusaDz-_CSHISAe6etTFauis1hwR7LCfLX2w7FhlibgvuvJJD1YdbOEw06R_jz673DTK3i2mI1EmFKQtLcx3eIZRUN1To9apWENwOYyjOfm9PDG6x9yT2MwwRr_BW4rl8ILysYNoCbIo1_JiJV3QNItoX0-c8n8V_VBikY904NU-ZLWSAT_mZXVB-0YhIFngMIKZJCBNkaeY5EIepGlzWq7TkYpGDQNXUneW38oVKFC5mMgWRzH_lg7p0bRriG8s" />
-                      </div>
-                      <div>
-                        <p className="font-bold text-on-surface">Luxe Hotels Group</p>
-                        <p className="text-xs text-outline">Hospitality & Travel</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="py-lg"><span className="px-sm py-xs bg-purple-100 text-purple-700 text-[10px] font-bold rounded uppercase">Enterprise</span></td>
-                  <td className="py-lg">
-                    <div className="flex gap-xs text-white">
-                      <div className="w-6 h-6 flex items-center justify-center bg-[#E1306C] rounded"><span className="material-symbols-outlined text-[14px]">camera</span></div>
-                      <div className="w-6 h-6 flex items-center justify-center bg-[#1877F2] rounded"><span className="material-symbols-outlined text-[14px]">social_leaderboard</span></div>
-                      <div className="w-6 h-6 flex items-center justify-center bg-black rounded"><span className="material-symbols-outlined text-[14px]">close</span></div>
-                    </div>
-                  </td>
-                  <td className="py-lg">
-                    <div className="flex items-center gap-xs">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                      <span className="text-body-md text-emerald-700 font-bold">Active</span>
-                    </div>
-                  </td>
-                  <td className="py-lg font-bold text-on-surface">14 posts</td>
-                  <td className="py-lg text-right"><button className="p-sm text-outline hover:text-primary transition-colors"><span className="material-symbols-outlined">more_vert</span></button></td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </section>
+        <p className="text-gray-500 text-lg">
+          All clients and platform activity — {todayStr}
+        </p>
+
       </div>
+
+      {/* STATS */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-10">
+
+        {stats.map((item) => (
+
+          <div
+            key={item.title}
+            className="bg-white rounded-3xl p-6 border border-gray-200 shadow-sm"
+          >
+
+            <div className="flex justify-between items-start mb-6">
+
+              <div>
+
+                <p className="text-gray-500 text-sm mb-3">
+                  {item.title}
+                </p>
+
+                <h2 className="text-5xl font-bold text-[#031B4E]">
+                  {loading ? '—' : item.value}
+                </h2>
+
+              </div>
+
+              <div className="w-12 h-12 rounded-2xl bg-gray-100 flex items-center justify-center">
+
+                <span className="material-symbols-outlined text-[#031B4E]">
+                  {item.icon}
+                </span>
+
+              </div>
+
+            </div>
+
+            <div className="flex items-center gap-1 text-green-600 font-semibold">
+
+              <span className="material-symbols-outlined text-sm">
+                trending_up
+              </span>
+
+              {item.growth}
+
+            </div>
+
+          </div>
+
+        ))}
+
+      </div>
+
+      {/* CHART + ALERTS */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+
+        {/* CHART */}
+        <div className="xl:col-span-2 bg-white rounded-3xl p-8 border border-gray-200 shadow-sm">
+
+          <div className="flex justify-between items-center mb-8">
+
+            <h2 className="text-3xl font-bold text-[#031B4E]">
+              Posts published vs scheduled
+            </h2>
+
+            <div className="flex gap-5 text-sm">
+
+              <div className="flex items-center gap-2">
+
+                <div className="w-3 h-3 rounded-full bg-[#031B4E]"></div>
+
+                Published
+
+              </div>
+
+              <div className="flex items-center gap-2">
+
+                <div className="w-3 h-3 rounded-full bg-[#BFC9EA]"></div>
+
+                Scheduled
+
+              </div>
+
+            </div>
+
+          </div>
+
+          {/* GRAPH */}
+          <div className="flex items-end gap-3 h-[320px]">
+
+            {chartData.map((value, index) => (
+
+              <div
+                key={index}
+                className="flex-1 flex flex-col justify-end"
+              >
+
+                <div
+                  className="bg-[#BFC9EA] rounded-t-xl"
+                  style={{
+                    height: `${(chartScheduled[index] || 60) + 60}px`
+                  }}
+                ></div>
+
+                <div
+                  className="bg-[#031B4E]"
+                  style={{
+                    height: `${value}px`
+                  }}
+                ></div>
+
+              </div>
+
+            ))}
+
+          </div>
+
+        </div>
+
+        {/* ALERTS */}
+        <div className="bg-white rounded-3xl p-8 border border-gray-200 shadow-sm">
+
+          <h2 className="text-3xl font-bold text-[#031B4E] mb-8">
+            Alerts & Notifications
+          </h2>
+
+          <div className="space-y-5">
+
+            {loading ? (
+              <p className="text-gray-400 text-sm">Loading alerts...</p>
+            ) : alerts.length === 0 ? (
+              <div className="bg-green-50 border-l-4 border-green-400 rounded-2xl p-5">
+                <h3 className="font-bold text-green-700 mb-2">
+                  All Clear
+                </h3>
+                <p className="text-green-600 text-sm">
+                  No alerts or warnings at this time.
+                </p>
+              </div>
+            ) : (
+              alerts.map((alert, idx) => {
+                const colorMap = {
+                  warning: { bg: 'bg-orange-50', border: 'border-orange-400', title: 'text-orange-700', msg: 'text-orange-600' },
+                  critical: { bg: 'bg-red-50', border: 'border-red-400', title: 'text-red-700', msg: 'text-red-600' },
+                  info: { bg: 'bg-blue-50', border: 'border-blue-500', title: 'text-blue-700', msg: 'text-blue-600' },
+                };
+                const style = colorMap[alert.severity] || colorMap.info;
+                return (
+                  <div key={`${alert.type}-${idx}`} className={`${style.bg} border-l-4 ${style.border} rounded-2xl p-5`}>
+                    <h3 className={`font-bold ${style.title} mb-2`}>
+                      {alert.title}
+                    </h3>
+                    <p className={`${style.msg} text-sm`}>
+                      {alert.message}
+                    </p>
+                  </div>
+                );
+              })
+            )}
+
+          </div>
+
+        </div>
+
+      </div>
+
     </SMHLayout>
+
   );
+
 }

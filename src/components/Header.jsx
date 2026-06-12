@@ -1,4 +1,4 @@
-export default function Header({ title }) {
+export default function Header() {
   return (
     <header className="fixed top-0 right-0 w-[calc(100%-240px)] h-[64px] bg-surface border-b border-surface-variant z-40 px-lg flex justify-between items-center">
       <div className="flex items-center gap-md flex-1">
