@@ -15,8 +15,7 @@ export default function ClientLayout({ children }) {
       {/* Top AppBar (Mobile context) */}
       <header className="fixed top-0 left-0 right-0 z-40 bg-surface border-b border-surface-variant h-[64px] flex justify-between items-center px-lg md:ml-[240px]">
         <div className="flex items-center gap-md">
-          <span className="material-symbols-outlined text-on-surface-variant cursor-pointer p-sm rounded-full hover:bg-surface-container md:hidden">menu</span>
-          <h1 className="font-headline-md text-headline-md font-bold text-primary">SocialManager Pro</h1>
+          <h1 className="font-headline-md text-headline-md font-bold text-primary">Content Manager</h1>
         </div>
         <div className="flex items-center gap-md">
           <div className="w-8 h-8 rounded-full bg-primary-fixed-dim flex items-center justify-center overflow-hidden">
@@ -56,10 +55,8 @@ export default function ClientLayout({ children }) {
       </aside>
 
       {/* Main Content Area */}
-      <main className="pt-[80px] pb-[100px] px-md md:ml-[240px]">
-        <div className="max-w-4xl mx-auto">
-          {children}
-        </div>
+      <main className="pt-[80px] pb-[100px] px-lg md:ml-[240px]">
+        {children}
       </main>
 
       {/* Bottom Navigation Bar (Mobile Only) */}

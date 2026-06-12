@@ -1,5 +1,3 @@
-import { Link } from 'react-router-dom';
-
 export default function Dashboard() {
   const metrics = [
     { name: 'Posts this month', value: '24', trend: '+4.2%', icon: 'edit_square', iconColor: 'text-primary' },

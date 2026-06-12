@@ -20,6 +20,14 @@ class Client(models.Model):
 
     contact_number = models.CharField(max_length=15, blank=True)
 
+    bio = models.TextField(blank=True)
+
+    profile_picture = models.ImageField(
+        upload_to='profile_pictures/',
+        blank=True,
+        null=True
+    )
+
     logo = models.ImageField(
         upload_to='client_logos/',
         blank=True,
@@ -55,6 +63,30 @@ class SMH(models.Model):
 
     def __str__(self):
         return self.user.username
+
+
+# =========================================================
+# WORKSPACE SETTINGS MODEL
+# =========================================================
+
+class WorkspaceSettings(models.Model):
+    smh = models.OneToOneField(
+        SMH,
+        on_delete=models.CASCADE,
+        related_name='settings'
+    )
+
+    workspace_name = models.CharField(max_length=255, default="SocialManager Pro")
+    timezone = models.CharField(max_length=100, default="Asia/Kolkata")
+    theme_color = models.CharField(max_length=20, default="#031B4E")
+    default_posting_time = models.TimeField(default="18:00")
+    ai_caption_style = models.CharField(max_length=50, default="Professional")
+    default_platform = models.CharField(max_length=50, default="Instagram")
+
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.smh.user.username} Settings"
 
 
 # =========================================================
@@ -132,6 +164,13 @@ class SocialMediaAccount(models.Model):
     )
 
     access_token = models.TextField(blank=True)
+
+    page_access_token = models.TextField(blank=True)
+
+    instagram_business_account_id = models.CharField(
+        max_length=255,
+        blank=True
+    )
 
     refresh_token = models.TextField(blank=True)
 
@@ -320,6 +359,16 @@ class PostPlatform(models.Model):
         Platform,
         on_delete=models.CASCADE
     )
+
+    platform_caption = models.TextField(blank=True)
+
+    platform_media = models.FileField(
+        upload_to='post_media/platforms/',
+        blank=True,
+        null=True
+    )
+
+    platform_metadata = models.JSONField(default=dict)
 
     class Meta:
         unique_together = ('post', 'platform')
