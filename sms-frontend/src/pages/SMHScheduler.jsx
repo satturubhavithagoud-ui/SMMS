@@ -41,6 +41,8 @@ const mapBackendPost = (bp) => {
   let displayStatus = "pending";
   if (bp.status === "POSTED") {
     displayStatus = "success";
+  } else if (bp.status === "FAILED") {
+    displayStatus = "failed";
   }
 
   const clientName = bp.clients && bp.clients.length > 0
@@ -192,6 +194,7 @@ export default function SMHScheduler() {
       // Status filter
       if (filterStatus === "Posted"  && p.status !== "success") return false;
       if (filterStatus === "Pending" && p.status !== "pending") return false;
+      if (filterStatus === "Failed"  && p.status !== "failed") return false;
       return true;
     });
   }, [posts, filterDate, filterClient, filterStatus]);
@@ -220,7 +223,7 @@ export default function SMHScheduler() {
     setShowPostPopup(true);
     setPostAnalytics(null);
 
-    if (post.status === 'success' && post.id) {
+    if ((post.status === 'success' || post.status === 'failed') && post.id) {
       setLoadingPostAnalytics(true);
       try {
         const res = await fetch(`http://127.0.0.1:8000/api/posts/${post.id}/analytics/`);
@@ -558,6 +561,7 @@ export default function SMHScheduler() {
                 <option>All Status</option>
                 <option>Posted</option>
                 <option>Pending</option>
+                <option>Failed</option>
               </select>
             </div>
           </div>
@@ -636,7 +640,7 @@ export default function SMHScheduler() {
                       </div>
                     </td>
                     <td className="px-6 py-6">
-                        {post.status === "success" ? (
+                        {post.status === "success" || post.status === "failed" ? (
                           <button
                             onClick={e => { e.stopPropagation(); openPost(post); }}
                             className="flex items-center gap-1.5 text-xs font-bold text-[#031B4E] bg-[#031B4E]/5 hover:bg-[#031B4E]/10 border border-[#031B4E]/10 px-3 py-1.5 rounded-xl transition"
@@ -649,8 +653,8 @@ export default function SMHScheduler() {
                         )}
                       </td>
                     <td className="px-6 py-6">
-                      <span className={`px-4 py-2 rounded-full text-sm font-bold ${post.status === "success" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}`}>
-                        {post.status === "success" ? "Posted" : "Pending"}
+                      <span className={`px-4 py-2 rounded-full text-sm font-bold ${post.status === "success" ? "bg-green-100 text-green-700" : post.status === "failed" ? "bg-red-100 text-red-700" : "bg-yellow-100 text-yellow-700"}`}>
+                        {post.status === "success" ? "Posted" : post.status === "failed" ? "Failed" : "Pending"}
                       </span>
                     </td>
                     <td className="px-6 py-6" onClick={e => e.stopPropagation()}>
@@ -747,7 +751,7 @@ export default function SMHScheduler() {
                       <div
                         key={p.id}
                         onClick={() => openPost(p)}
-                        className={`text-[11px] p-1.5 rounded-lg font-semibold truncate mb-1 cursor-pointer transition ${p.status === "success" ? "bg-green-100 text-green-700 hover:bg-green-200" : "bg-orange-100 text-orange-700 hover:bg-orange-200"}`}
+                        className={`text-[11px] p-1.5 rounded-lg font-semibold truncate mb-1 cursor-pointer transition ${p.status === "success" ? "bg-green-100 text-green-700 hover:bg-green-200" : p.status === "failed" ? "bg-red-100 text-red-700 hover:bg-red-200" : "bg-orange-100 text-orange-700 hover:bg-orange-200"}`}
                         title={p.topic}
                       >
                         {p.platforms.map(plat => plat.charAt(0).toUpperCase()).join("/")}: {p.topic}
@@ -1253,7 +1257,13 @@ export default function SMHScheduler() {
                 </div>
                 <div>
                   <h3 className="font-bold text-2xl text-[#031B4E]">{selectedPost.client}</h3>
-                  <p className="text-gray-500">{selectedPost.status === "success" ? "Posted Successfully" : "Pending Post"}</p>
+                  <p className="text-gray-500">
+                    {selectedPost.status === "success"
+                      ? "Posted Successfully"
+                      : selectedPost.status === "failed"
+                      ? "Posted with Errors"
+                      : "Pending Post"}
+                  </p>
                 </div>
                 <button onClick={() => setShowPostPopup(false)} className="ml-auto w-10 h-10 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-500 text-2xl">×</button>
               </div>
@@ -1274,7 +1284,7 @@ export default function SMHScheduler() {
                 <h2 className="text-3xl font-bold text-[#031B4E] mb-3">{selectedPost.topic}</h2>
                 <p className="text-gray-600 text-lg leading-relaxed mb-8">{selectedPost.description}</p>
 
-                {selectedPost.status === "success" && (
+                {(selectedPost.status === "success" || selectedPost.status === "failed") && (
                   <div>
                     {/* Analytics header */}
                     <div className="flex items-center justify-between mb-5">
@@ -1393,7 +1403,7 @@ export default function SMHScheduler() {
                   </div>
                 )}
 
-                {selectedPost.status === "pending" && (
+                {selectedPost.status !== "success" && selectedPost.status !== "failed" && (
                   <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-6 flex gap-4">
                     <span className="material-symbols-outlined text-yellow-500 text-[28px]">warning</span>
                     <div>

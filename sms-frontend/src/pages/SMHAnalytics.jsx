@@ -84,56 +84,26 @@ export default function SMHAnalytics() {
 
   return (
     <SMHLayout>
-      <main className="p-8 w-full min-h-screen bg-[#F6F5FA]">
-
-        {/* TOP BAR */}
-        <div className="flex justify-between items-center mb-8">
-          <div className="relative w-full max-w-2xl">
-            <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">search</span>
-            <input type="text" placeholder="Search analytics, campaigns, reports..." className="w-full bg-white border border-gray-200 rounded-2xl py-4 pl-14 pr-5 shadow-sm outline-none focus:border-[#031B4E]" />
-          </div>
-          <div className="flex items-center gap-5 ml-6">
-            <div className="relative">
-              <button onClick={() => setShowNotifications(!showNotifications)} className="relative w-11 h-11 flex items-center justify-center rounded-full hover:bg-gray-100 transition">
-                <span className="material-symbols-outlined text-[#031B4E]">notifications</span>
-                <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-orange-500 rounded-full border-2 border-white"></span>
-              </button>
-              {showNotifications && (
-                <div className="absolute right-0 mt-3 w-80 bg-white rounded-2xl shadow-xl border border-gray-100 p-5 z-50">
-                  <h3 className="font-bold text-lg text-[#031B4E] mb-4">Notifications</h3>
-                  <div className="space-y-3">
-                    <div className="bg-blue-50 border-l-4 border-blue-500 rounded-xl p-4"><h4 className="font-semibold text-blue-700">Reach Increased</h4><p className="text-sm text-blue-600 mt-1">Instagram campaign performance increased by 18%.</p></div>
-                    <div className="bg-green-50 border-l-4 border-green-500 rounded-xl p-4"><h4 className="font-semibold text-green-700">New Analytics Report</h4><p className="text-sm text-green-600 mt-1">Weekly analytics report is ready for export.</p></div>
-                  </div>
-                </div>
-              )}
-            </div>
-            <div className="relative">
-              <button onClick={() => setShowProfile(!showProfile)} className="flex items-center gap-3 hover:bg-gray-100 px-3 py-2 rounded-2xl transition">
-                <div className="w-10 h-10 rounded-full bg-[#031B4E] text-white flex items-center justify-center font-bold text-sm">SR</div>
-                <div className="hidden sm:block text-left"><p className="font-semibold text-[#031B4E] text-sm">Sarah Rogers</p><p className="text-xs text-gray-400">SMH Manager</p></div>
-                <span className="material-symbols-outlined text-gray-400 text-[20px]">expand_more</span>
-              </button>
-              {showProfile && (
-                <div className="absolute right-0 mt-3 w-56 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden z-50">
-                  <div className="p-4 border-b"><p className="font-bold text-[#031B4E]">Sarah Rogers</p><p className="text-sm text-gray-400">sarahrogers@smh.com</p></div>
-                  <div className="py-2">
-                    <button className="w-full text-left px-4 py-3 hover:bg-gray-50 text-sm font-medium text-[#031B4E] flex items-center gap-3"><span className="material-symbols-outlined text-[18px]">person</span>Profile</button>
-                    <button className="w-full text-left px-4 py-3 hover:bg-red-50 text-sm font-medium text-red-500 flex items-center gap-3"><span className="material-symbols-outlined text-[18px]">logout</span>Logout</button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+      <main className="p-2 w-full min-h-screen">
 
         {/* HEADER + FILTERS */}
-        <div className="flex justify-between items-end mb-8">
+        <div className="flex flex-col md:flex-row justify-between md:items-end gap-6 mb-8">
           <div>
-            <h1 className="text-[42px] font-bold text-[#031B4E]">Analytics</h1>
-            <p className="text-gray-500 text-lg mt-1">Detailed performance insights across all managed accounts.</p>
+            <h1 className="text-[42px] font-bold text-[#031B4E] leading-tight">Analytics</h1>
+            <p className="text-gray-500 text-lg mt-1 mb-6">Detailed performance insights across all managed accounts.</p>
+            
+            {/* Search Bar */}
+            <div className="relative w-full" style={{ width: '400px', maxWidth: '100%' }}>
+              <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">search</span>
+              <input 
+                type="text" 
+                placeholder="Search analytics, campaigns..." 
+                className="w-full bg-white border border-gray-200 rounded-2xl py-3.5 pl-14 pr-5 shadow-sm outline-none focus:border-[#031B4E] transition"
+                style={{ width: '100%', boxSizing: 'border-box' }}
+              />
+            </div>
           </div>
-          <div className="flex bg-white border border-gray-200 rounded-2xl p-1 shadow-sm">
+          <div className="flex bg-white border border-gray-200 rounded-2xl p-1 shadow-sm shrink-0">
             {[['30','Last 30 Days'],['90','90 Days'],['365','1 Year']].map(([val, label]) => (
               <button key={val} onClick={() => setActiveFilter(val)}
                 className={`px-5 py-2.5 rounded-xl font-bold text-sm transition ${activeFilter === val ? 'bg-[#031B4E] text-white shadow' : 'text-gray-500 hover:text-[#031B4E]'}`}>

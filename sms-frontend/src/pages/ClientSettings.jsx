@@ -167,7 +167,11 @@ export default function ClientSettings() {
         const stored = JSON.parse(localStorage.getItem('user') || '{}');
         stored.username = result.full_name;
         stored.email = result.email;
+        if (result.profile_picture) {
+          stored.profile_picture = result.profile_picture;
+        }
         localStorage.setItem('user', JSON.stringify(stored));
+        window.dispatchEvent(new Event('user-profile-updated'));
       } catch {
         // Ignore localStorage sync failures after a successful profile save.
       }

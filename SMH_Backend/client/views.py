@@ -1420,7 +1420,7 @@ def clients_view(request):
                 dt = post.created_at
             
             date_str = dt.strftime("%d %b %Y") if dt else ""
-            status_ui = "success" if post.status == "POSTED" else "pending"
+            status_ui = "success" if post.status == "POSTED" else ("failed" if post.status == "FAILED" else "pending")
 
             # ── Real analytics are fetched live from the platform APIs
             #    via GET /api/posts/<id>/analytics/ when the popup opens.
@@ -2451,7 +2451,7 @@ def post_analytics_view(request, post_id):
     if not post:
         return JsonResponse({'error': 'Post not found.'}, status=404)
 
-    if post.status not in ('POSTED', 'posted'):
+    if post.status not in ('POSTED', 'posted', 'FAILED', 'failed'):
         return JsonResponse({
             'available': False,
             'reason': 'Post has not been published yet.',
@@ -2478,10 +2478,11 @@ def post_analytics_view(request, post_id):
         platform_post_id = metadata.get('platform_post_id')
 
         if not platform_post_id:
+            reason = 'Post failed to publish on this platform.' if post.status in ('FAILED', 'failed') else 'Platform post ID not recorded (post was published before analytics tracking was enabled).'
             results.append({
                 'platform': platform_name.lower(),
                 'available': False,
-                'reason': 'Platform post ID not recorded (post was published before analytics tracking was enabled).',
+                'reason': reason,
             })
             continue
 
@@ -2538,6 +2539,7 @@ def post_analytics_view(request, post_id):
     return JsonResponse({
         'post_id': post_id,
         'available': any_real_data,
+        'reason': 'This post failed to publish on all target platforms.' if not any_real_data else '',
         'totals': {
             'likes':    total_likes,
             'comments': total_comments,

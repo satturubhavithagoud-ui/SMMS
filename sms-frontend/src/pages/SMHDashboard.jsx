@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import SMHLayout from '../components/SMHLayout';
 import { apiRequest } from '../services/api';
 
@@ -11,8 +12,7 @@ export default function SMHDashboard() {
     { title: 'Posts scheduled', value: '—', growth: '', icon: 'calendar_month' },
     { title: 'Total reach', value: '—', growth: '', icon: 'visibility' },
   ]);
-  const [chartData, setChartData] = useState([70, 55, 90, 65, 80, 30, 40]);
-  const [chartScheduled, setChartScheduled] = useState([60, 60, 60, 60, 60, 60, 60]);
+  const [weeklyData, setWeeklyData] = useState([]);
   const [alerts, setAlerts] = useState([]);
 
   useEffect(() => {
@@ -49,13 +49,8 @@ export default function SMHDashboard() {
         ]);
 
         // Weekly chart
-        const weekly = data.weekly_chart || [];
-        if (weekly.length > 0) {
-          // Coerce missing values to 0 to avoid NaN in Math operations
-          const maxVal = Math.max(...weekly.map(d => Math.max(d?.published ?? 0, d?.scheduled ?? 0, d?.created ?? 0, 1)));
-          const scale = 100 / (maxVal || 1);
-          setChartData(weekly.map(d => Math.max((Number(d?.published ?? 0) || 0) * scale, 10)));
-          setChartScheduled(weekly.map(d => Math.max((Number(d?.scheduled ?? 0) || 0) * scale, 10)));
+        if (data.weekly_chart) {
+          setWeeklyData(data.weekly_chart);
         }
 
         // Alerts
@@ -180,33 +175,36 @@ export default function SMHDashboard() {
           </div>
 
           {/* GRAPH */}
-          <div className="flex items-end gap-3 h-[320px]">
-
-            {chartData.map((value, index) => (
-
-              <div
-                key={index}
-                className="flex-1 flex flex-col justify-end"
-              >
-
-                <div
-                  className="bg-[#BFC9EA] rounded-t-xl"
-                  style={{
-                    height: `${(chartScheduled[index] || 60) + 60}px`
-                  }}
-                ></div>
-
-                <div
-                  className="bg-[#031B4E]"
-                  style={{
-                    height: `${value}px`
-                  }}
-                ></div>
-
+          <div className="h-[320px] w-full">
+            {weeklyData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={weeklyData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                  <XAxis 
+                    dataKey="label" 
+                    tickLine={false} 
+                    axisLine={false} 
+                    tick={{ fill: '#9CA3AF', fontSize: 12, fontWeight: 500 }} 
+                  />
+                  <YAxis 
+                    tickLine={false} 
+                    axisLine={false} 
+                    tick={{ fill: '#9CA3AF', fontSize: 12, fontWeight: 500 }} 
+                    allowDecimals={false}
+                  />
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #F3F4F6', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}
+                    labelStyle={{ fontWeight: 'bold', color: '#031B4E' }}
+                  />
+                  <Bar dataKey="published" name="Published" fill="#031B4E" radius={[4, 4, 0, 0]} maxBarSize={32} />
+                  <Bar dataKey="scheduled" name="Scheduled" fill="#BFC9EA" radius={[4, 4, 0, 0]} maxBarSize={32} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-full text-gray-400">
+                No activity data available.
               </div>
-
-            ))}
-
+            )}
           </div>
 
         </div>

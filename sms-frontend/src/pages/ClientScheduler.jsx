@@ -412,7 +412,7 @@ export default function ClientScheduler() {
   const openPost = async (post) => {
     setSelectedPost(post);
     setShowPostPopup(true);
-    if (post.status === 'Posted') fetchPostAnalytics(post.id);
+    if (post.status === 'Posted' || post.status === 'Failed') fetchPostAnalytics(post.id);
   };
   const openPlatform = async (pd, post, e) => {
     e.stopPropagation();

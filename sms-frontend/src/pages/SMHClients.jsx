@@ -480,8 +480,8 @@ export default function SMHClients() {
     setShowPostPopup(true);
     setPostAnalytics(null);
 
-    // Only fetch real analytics for published posts
-    if (post.status === 'success' && post.id) {
+    // Only fetch real analytics for published/failed posts
+    if ((post.status === 'success' || post.status === 'failed') && post.id) {
       setLoadingPostAnalytics(true);
       try {
         const data = await apiRequest(`/posts/${post.id}/analytics/`);
@@ -501,58 +501,7 @@ export default function SMHClients() {
 
   return (
     <SMHLayout>
-      <main className="p-8 min-h-screen bg-[#f7f7fb]">
-
-        {/* TOP BAR */}
-        <div className="flex justify-between items-center mb-10">
-          <div className="relative w-full max-w-2xl">
-            <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">search</span>
-            <input
-              type="text"
-              placeholder="Search clients, platforms, categories..."
-              value={searchQuery}
-              onChange={e => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-              className="w-full bg-white border border-gray-200 rounded-2xl py-4 pl-14 pr-5 shadow-sm outline-none focus:border-[#031B4E] transition"
-            />
-          </div>
-          <div className="flex items-center gap-6 ml-6">
-            {/* Notifications */}
-            <div className="relative">
-              <button onClick={() => setShowNotifications(!showNotifications)} className="relative w-11 h-11 flex items-center justify-center rounded-full hover:bg-gray-100 transition">
-                <span className="material-symbols-outlined text-[#031B4E]">notifications</span>
-                <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-orange-500 rounded-full border-2 border-white"></span>
-              </button>
-              {showNotifications && (
-                <div className="absolute right-0 mt-3 w-80 bg-white rounded-2xl shadow-xl border border-gray-100 p-5 z-50">
-                  <h3 className="font-bold text-lg text-[#031B4E] mb-4">Notifications</h3>
-                  <div className="space-y-3">
-                    <div className="bg-orange-50 border-l-4 border-orange-400 rounded-xl p-4"><h4 className="font-semibold text-orange-700">API Token Expiring</h4><p className="text-sm text-orange-600 mt-1">Instagram token for Luxe Hotels expires in 2 days.</p></div>
-                    <div className="bg-blue-50 border-l-4 border-blue-500 rounded-xl p-4"><h4 className="font-semibold text-blue-700">New Campaign</h4><p className="text-sm text-blue-600 mt-1">TechNova added 12 new assets to the library.</p></div>
-                    <div className="bg-green-50 border-l-4 border-green-500 rounded-xl p-4"><h4 className="font-semibold text-green-700">Post Published</h4><p className="text-sm text-green-600 mt-1">Elite Fashion's Instagram post went live successfully.</p></div>
-                  </div>
-                </div>
-              )}
-            </div>
-            {/* Profile */}
-            <div className="relative">
-              <button onClick={() => setShowProfileMenu(!showProfileMenu)} className="flex items-center gap-3 hover:bg-gray-100 px-3 py-2 rounded-2xl transition">
-                <div className="w-10 h-10 rounded-full bg-[#031B4E] text-white flex items-center justify-center font-bold text-sm">SR</div>
-                <div className="text-left hidden sm:block"><p className="font-semibold text-[#031B4E] text-sm leading-tight">Sarah Rogers</p><p className="text-xs text-gray-400">SMH Manager</p></div>
-                <span className="material-symbols-outlined text-gray-400 text-[20px]">expand_more</span>
-              </button>
-              {showProfileMenu && (
-                <div className="absolute right-0 mt-3 w-56 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden z-50">
-                  <div className="p-4 border-b border-gray-100"><p className="font-bold text-[#031B4E]">Sarah Rogers</p><p className="text-sm text-gray-400">sarahrogers@smh.com</p></div>
-                  <div className="py-2">
-                    <button className="w-full text-left px-4 py-3 hover:bg-gray-50 text-sm font-medium text-[#031B4E] flex items-center gap-3"><span className="material-symbols-outlined text-[18px]">person</span>Profile</button>
-                    <button className="w-full text-left px-4 py-3 hover:bg-gray-50 text-sm font-medium text-[#031B4E] flex items-center gap-3"><span className="material-symbols-outlined text-[18px]">settings</span>Settings</button>
-                    <button className="w-full text-left px-4 py-3 hover:bg-red-50 text-sm font-medium text-red-500 flex items-center gap-3"><span className="material-symbols-outlined text-[18px]">logout</span>Logout</button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+      <main className="p-2 min-h-screen">
 
         {/* BREADCRUMBS */}
         <div className="flex items-center gap-2 text-base text-gray-500 mb-8">
@@ -573,10 +522,21 @@ export default function SMHClients() {
         {activeView === "clients" && (
           <>
             {/* PAGE HEADER */}
-            <div className="flex justify-between items-center mb-10">
-              <div>
-                <h1 className="text-[48px] font-bold text-[#001b5e]">Clients Management</h1>
-                <p className="text-gray-500 text-lg mt-1">View connected clients and social media accounts.</p>
+            <div className="mb-10 text-left">
+              <h1 className="text-[48px] font-bold text-[#001b5e] leading-tight">Clients Management</h1>
+              <p className="text-gray-500 text-lg mt-1 mb-6">View connected clients and social media accounts.</p>
+              
+              {/* Search Bar */}
+              <div className="relative w-full" style={{ width: '400px', maxWidth: '100%' }}>
+                <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">search</span>
+                <input
+                  type="text"
+                  placeholder="Search clients, platforms, categories..."
+                  value={searchQuery}
+                  onChange={e => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+                  className="w-full bg-white border border-gray-200 rounded-2xl py-3.5 pl-14 pr-5 shadow-sm outline-none focus:border-[#031B4E] transition"
+                  style={{ width: '100%', boxSizing: 'border-box' }}
+                />
               </div>
             </div>
 
@@ -800,24 +760,24 @@ export default function SMHClients() {
                           )}
                         </div>
                       </td>
-                      <td className="px-6 py-6">
-                        {post.status === "success" ? (
-                          <button
-                            onClick={e => { e.stopPropagation(); openPostPopup(post); }}
-                            className="flex items-center gap-1.5 text-xs font-bold text-[#031B4E] bg-[#031B4E]/5 hover:bg-[#031B4E]/10 border border-[#031B4E]/10 px-3 py-1.5 rounded-xl transition"
-                          >
-                            <span className="material-symbols-outlined text-[14px]">analytics</span>
-                            View
-                          </button>
-                        ) : (
-                          <span className="text-gray-400 font-semibold">—</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-6">
-                        <span className={`px-4 py-2 rounded-full text-sm font-bold ${post.status === "success" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}`}>
-                          {post.status === "success" ? "Posted" : "Pending"}
-                        </span>
-                      </td>
+                       <td className="px-6 py-6">
+                         {post.status === "success" || post.status === "failed" ? (
+                           <button
+                             onClick={e => { e.stopPropagation(); openPostPopup(post); }}
+                             className="flex items-center gap-1.5 text-xs font-bold text-[#031B4E] bg-[#031B4E]/5 hover:bg-[#031B4E]/10 border border-[#031B4E]/10 px-3 py-1.5 rounded-xl transition"
+                           >
+                             <span className="material-symbols-outlined text-[14px]">analytics</span>
+                             View
+                           </button>
+                         ) : (
+                           <span className="text-gray-400 font-semibold">—</span>
+                         )}
+                       </td>
+                       <td className="px-6 py-6">
+                         <span className={`px-4 py-2 rounded-full text-sm font-bold ${post.status === "success" ? "bg-green-100 text-green-700" : post.status === "failed" ? "bg-red-100 text-red-700" : "bg-yellow-100 text-yellow-700"}`}>
+                           {post.status === "success" ? "Posted" : post.status === "failed" ? "Failed" : "Pending"}
+                         </span>
+                       </td>
                       {/* Actions — only for pending */}
                       <td className="px-6 py-6" onClick={e => e.stopPropagation()}>
                         {post.status === "pending" && (
@@ -979,7 +939,13 @@ export default function SMHClients() {
                 <img src={selectedPost.icon} alt="" className="w-12 h-12 rounded-xl" />
                 <div>
                   <h3 className="font-bold text-2xl text-[#031B4E]">{selectedClient?.name}</h3>
-                  <p className="text-gray-500">{selectedPost.status === "success" ? "Posted Successfully" : "Pending Post"}</p>
+                  <p className="text-gray-500">
+                    {selectedPost.status === "success"
+                      ? "Posted Successfully"
+                      : selectedPost.status === "failed"
+                      ? "Posted with Errors"
+                      : "Pending Post"}
+                  </p>
                 </div>
                 <button onClick={() => setShowPostPopup(false)} className="ml-auto w-10 h-10 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-500 text-2xl">×</button>
               </div>
@@ -998,7 +964,7 @@ export default function SMHClients() {
                 <h2 className="text-3xl font-bold text-[#031B4E] mb-3">{selectedPost.topic}</h2>
                 <p className="text-gray-600 text-lg leading-relaxed mb-8">{selectedPost.description}</p>
 
-                {selectedPost.status === "success" && (
+                {(selectedPost.status === "success" || selectedPost.status === "failed") && (
                   <div>
                     {/* Analytics header */}
                     <div className="flex items-center justify-between mb-5">
@@ -1129,7 +1095,7 @@ export default function SMHClients() {
                   </div>
                 )}
 
-                {selectedPost.status === "pending" && (
+                {selectedPost.status !== "success" && selectedPost.status !== "failed" && (
                   <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-6 flex gap-4">
                     <span className="material-symbols-outlined text-yellow-500 text-[28px]">warning</span>
                     <div>
