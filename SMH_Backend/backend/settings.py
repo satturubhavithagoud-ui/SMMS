@@ -174,4 +174,7 @@ FACEBOOK_REDIRECT_URI = os.environ.get(
 INSTAGRAM_REDIRECT_URI = os.environ.get('INSTAGRAM_REDIRECT_URI', 'http://localhost:8000/api/oauth/callback/')
 FRONTEND_BASE_URL = os.environ.get('FRONTEND_BASE_URL', 'http://localhost:5181')
 
+GROQ_API_KEY = os.environ.get('GROQ_API_KEY', '')
+GROQ_MODEL = os.environ.get('GROQ_MODEL', 'llama-3.3-70b-versatile')
+
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')

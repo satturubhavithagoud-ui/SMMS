@@ -49,6 +49,14 @@ class SMH(models.Model):
 
     experience_years = models.PositiveIntegerField(default=0)
 
+    agency_name = models.CharField(max_length=120, blank=True, default='')
+
+    notify_email = models.BooleanField(default=True)
+
+    notify_push = models.BooleanField(default=True)
+
+    notify_weekly = models.BooleanField(default=True)
+
     is_active = models.BooleanField(default=True)
 
     joined_at = models.DateTimeField(auto_now_add=True)
@@ -442,6 +450,33 @@ class Notification(models.Model):
 
     def __str__(self):
         return self.title
+
+
+# =========================================================
+# CLIENT PREFERENCES MODEL
+# =========================================================
+
+class ClientPreferences(models.Model):
+
+    client = models.OneToOneField(
+        Client,
+        on_delete=models.CASCADE,
+        related_name='preferences'
+    )
+
+    notify_post_approval = models.BooleanField(default=True)
+    notify_post_approved = models.BooleanField(default=True)
+    notify_post_rejected = models.BooleanField(default=True)
+    notify_post_failed = models.BooleanField(default=True)
+    notify_report_ready = models.BooleanField(default=True)
+    notify_package_expiry = models.BooleanField(default=True)
+    email_digest = models.BooleanField(default=False)
+    two_factor_enabled = models.BooleanField(default=False)
+
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.client.user.username} preferences"
 
 
 

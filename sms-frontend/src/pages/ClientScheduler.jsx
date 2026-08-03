@@ -1,132 +1,35 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
+import { Link } from 'react-router-dom';
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+  Legend,
+} from 'recharts';
 import ClientLayout from '../components/ClientLayout';
-import { getPlatforms } from '../services/authService';
-import { createPost, getPosts } from '../services/postService';
+import PlatformLogo from '../components/PlatformLogo';
+import { PageHeader, SectionCard, EmptyState, StatusBadge, statusDotColor } from '../components/ui';
+import { getPlatforms, getConnectedPlatforms } from '../services/authService';
+import {
+  createPost,
+  getPosts,
+  deletePost,
+  publishPost,
+  retryPost,
+  editPost,
+} from '../services/postService';
 
-const FALLBACK_PLATFORMS = [
-  { value: 'instagram', label: 'Instagram' },
-  { value: 'facebook', label: 'Facebook' },
-  { value: 'linkedin', label: 'LinkedIn' },
-  { value: 'pinterest', label: 'Pinterest' },
-  { value: 'youtube', label: 'YouTube' },
-  { value: 'twitter', label: 'Twitter/X' },
-];
-
-const PLATFORM_ICON_MAP = {
-  instagram: 'photo_camera',
-  facebook: 'facebook',
-  linkedin: 'groups',
-  pinterest: 'push_pin',
-  youtube: 'play_circle',
-  twitter: 'close',
-};
-
-const PLATFORM_COLOR_MAP = {
-  instagram: 'bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600',
-  facebook: 'bg-[#1877F2]',
-  linkedin: 'bg-[#0077B5]',
-  pinterest: 'bg-[#E60023]',
-  youtube: 'bg-[#FF0000]',
-  twitter: 'bg-black',
-};
-
-function renderPlatformIcon(platform) {
-  switch (platform) {
-    case 'instagram':
-      return (
-        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor">
-          <path d="M7.5 2h9A5.5 5.5 0 0 1 22 7.5v9A5.5 5.5 0 0 1 16.5 22h-9A5.5 5.5 0 0 1 2 16.5v-9A5.5 5.5 0 0 1 7.5 2Zm0 1.5A4 4 0 0 0 3.5 7.5v9A4 4 0 0 0 7.5 20.5h9a4 4 0 0 0 4-4v-9a4 4 0 0 0-4-4h-9Zm9 2.25a.75.75 0 1 1 0 1.5.75.75 0 0 1 0-1.5ZM12 7.5a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9Zm0 1.5a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z" />
-        </svg>
-      );
-    case 'facebook':
-      return (
-        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor">
-          <path d="M13.5 21V13.25h2.5l.375-2.875H13.5V8.5c0-.833.208-1.4 1.28-1.4h1.367V4.12A19.606 19.606 0 0 0 14.175 4C11.8 4 10 5.26 10 8.115V10.38H7.625v2.875H10V21h3.5Z" />
-        </svg>
-      );
-    case 'twitter':
-      return (
-        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor">
-          <path d="M22 5.92c-.8.36-1.66.61-2.56.72a4.48 4.48 0 0 0 1.96-2.48 8.95 8.95 0 0 1-2.84 1.08 4.47 4.47 0 0 0-7.62 4.07A12.7 12.7 0 0 1 3 4.93a4.47 4.47 0 0 0 1.38 5.97 4.45 4.45 0 0 1-2.02-.56v.06a4.47 4.47 0 0 0 3.58 4.38 4.5 4.5 0 0 1-2.01.08 4.47 4.47 0 0 0 4.17 3.1A8.95 8.95 0 0 1 2 19.54a12.64 12.64 0 0 0 6.86 2.01c8.24 0 12.75-6.83 12.75-12.75 0-.19-.01-.38-.02-.57A9.1 9.1 0 0 0 22 5.92Z" />
-        </svg>
-      );
-    case 'linkedin':
-      return (
-        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor">
-          <path d="M6.94 21H2.78V8.99h4.16V21ZM4.86 7.45A2.41 2.41 0 1 1 7.27 5 2.4 2.4 0 0 1 4.86 7.45ZM21 21h-4.17v-5.5c0-1.31-.03-2.99-1.82-2.99-1.82 0-2.1 1.42-2.1 2.89V21h-4.16V8.99h4v1.63h.06a4.38 4.38 0 0 1 3.94-2.16c4.22 0 5 2.78 5 6.4V21Z" />
-        </svg>
-      );
-    case 'youtube':
-      return (
-        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor">
-          <path d="M21.8 7.2c-.2-.7-.8-1.3-1.6-1.4C18.36 5.5 12 5.5 12 5.5s-6.36 0-8.2.3c-.8.1-1.4.7-1.6 1.4C2 8.86 2 12 2 12s0 3.14.2 4.8c.2.7.8 1.3 1.6 1.4 1.84.3 8.2.3 8.2.3s6.36 0 8.2-.3c.8-.1 1.4-.7 1.6-1.4.2-1.66.2-4.8.2-4.8s0-3.14-.2-4.8ZM9.5 15.5V8.5l6 3.5-6 3.5Z" />
-        </svg>
-      );
-    case 'pinterest':
-      return (
-        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor">
-          <path d="M12 2.04C6.49 2.04 2.04 6.5 2.04 12c0 4.09 2.54 7.6 6.16 9.11-.08-.78-.15-1.98.03-2.83.17-.76 1.1-4.84 1.1-4.84s-.28-.56-.28-1.39c0-1.3.75-2.27 1.69-2.27.8 0 1.19.6 1.19 1.31 0 .8-.51 2-0.78 3.12-.22.94.46 1.7 1.37 1.7 1.64 0 2.91-1.73 2.91-4.23 0-2.21-1.59-3.77-3.86-3.77-2.63 0-4.17 1.97-4.17 4.01 0 .8.31 1.67.7 2.14.08.1.09.19.07.29-.08.32-.24 1-.27 1.14-.04.19-.13.23-.31.14-1.17-.54-1.9-2.24-1.9-3.6 0-2.92 2.12-5.58 6.12-5.58 3.22 0 5.72 2.3 5.72 5.36 0 3.2-2.02 5.78-4.82 5.78-0.94 0-1.82-.49-2.12-1.07l-.58 2.21c-.21.8-.78 1.8-1.16 2.41 1.03.32 2.12.49 3.26.49 5.51 0 9.96-4.46 9.96-9.96S17.51 2.04 12 2.04Z" />
-        </svg>
-      );
-    default:
-      return <span className="material-symbols-outlined text-lg">language</span>;
+function getUser() {
+  try {
+    return JSON.parse(window.localStorage.getItem('user') || '{}');
+  } catch {
+    return {};
   }
 }
-
-const staticPosts = [
-  {
-    id: 'static-1',
-    platforms: ['instagram'],
-    type: 'Reel Publication',
-    caption: 'Behind the scenes of our latest product launch! We’re so excited to finally show you what we’ve been working on...',
-    date: 'May 12',
-    time: '10:30 AM',
-    prediction: 'High Engagement Predicted',
-    platform: 'instagram',
-    status: 'SCHEDULED',
-    icon: 'camera',
-    gradient: 'from-yellow-400 via-pink-500 to-purple-600',
-  },
-  {
-    id: 'static-2',
-    platforms: ['facebook'],
-    type: 'Page Update',
-    caption: 'Join our community webinar this Friday to learn how to master social media analytics with our new tools.',
-    date: 'May 14',
-    time: '02:00 PM',
-    prediction: 'Stable Reach Prediction',
-    platform: 'facebook',
-    status: 'SCHEDULED',
-    icon: 'facebook',
-    bg: 'bg-[#1877F2]',
-  },
-  {
-    id: 'static-3',
-    platforms: ['twitter'],
-    type: 'Thread',
-    caption: '1/5 Why small businesses are failing at social media engagement and how to fix it in 3 easy steps. 🧵',
-    date: 'May 15',
-    time: '09:00 AM',
-    prediction: 'Viral Potential Detected',
-    platform: 'twitter',
-    status: 'SCHEDULED',
-    icon: 'close',
-    bg: 'bg-black',
-  },
-  {
-    id: 'static-4',
-    platforms: ['linkedin'],
-    type: 'Thought Leadership',
-    caption: 'Deep dive into the 2026 Digital Marketing Trends report. Here are the 5 things you need to know today.',
-    date: 'May 18',
-    time: '11:15 AM',
-    prediction: 'B2B Network Priority',
-    platform: 'linkedin',
-    status: 'SCHEDULED',
-    icon: 'groups',
-    bg: 'bg-[#0077B5]',
-  },
-];
 
 function formatDateTime(dateString, options) {
   if (!dateString) return '';
@@ -135,99 +38,78 @@ function formatDateTime(dateString, options) {
   return date.toLocaleString(undefined, options);
 }
 
-export default function ClientScheduler() {
-  const [showAddPost, setShowAddPost] = useState(false);
-  const [platformOptions, setPlatformOptions] = useState(FALLBACK_PLATFORMS);
-  const [selectedPlatforms, setSelectedPlatforms] = useState([]);
+function Toast({ toast, onClose }) {
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(onClose, 4000);
+    return () => clearTimeout(t);
+  }, [toast, onClose]);
+
+  if (!toast) return null;
+  return (
+    <div
+      className={`fixed top-4 right-4 z-[70] flex items-center gap-2 rounded-xl border px-4 py-3 shadow-popover transition-all ${
+        toast.type === 'success'
+          ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+          : 'border-red-200 bg-red-50 text-red-800'
+      }`}
+    >
+      <span className="material-symbols-outlined text-[18px]">{toast.type === 'success' ? 'check_circle' : 'error'}</span>
+      <span className="text-sm font-semibold">{toast.message}</span>
+    </div>
+  );
+}
+
+/* -------------------- Add Post Modal -------------------- */
+
+function AddPostModal({ open, platforms, onClose, onCreated, initialMode = 'now' }) {
   const [caption, setCaption] = useState('');
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
-  const [publishMode, setPublishMode] = useState('now');
+  const [selectedPlatforms, setSelectedPlatforms] = useState([]);
+  const [publishMode, setPublishMode] = useState(initialMode);
   const [scheduledDate, setScheduledDate] = useState('');
   const [scheduledTime, setScheduledTime] = useState('');
   const [formError, setFormError] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [scheduledPosts, setScheduledPosts] = useState([]);
-  const [loadingPosts, setLoadingPosts] = useState(true);
-  const [clientId, setClientId] = useState(null);
 
   useEffect(() => {
-    const user = JSON.parse(window.localStorage.getItem('user') || '{}');
-    setClientId(user?.client_id || null);
-    loadPlatforms();
+    if (open) {
+      setCaption('');
+      setSelectedPlatforms([]);
+      setImageFile(null);
+      setImagePreview(null);
+      setPublishMode(initialMode);
+      setScheduledDate('');
+      setScheduledTime('');
+      setFormError('');
+    }
+  }, [open, initialMode]);
+
+  useEffect(() => {
     return () => {
-      if (imagePreview) {
-        URL.revokeObjectURL(imagePreview);
-      }
+      if (imagePreview) URL.revokeObjectURL(imagePreview);
     };
-  }, []);
+  }, [imagePreview]);
 
-  useEffect(() => {
-    if (clientId !== null) {
-      loadPosts();
-    }
-  }, [clientId]);
+  if (!open) return null;
 
-  async function loadPlatforms() {
-    try {
-      const data = await getPlatforms();
-      if (Array.isArray(data) && data.length > 0) {
-        setPlatformOptions(data);
-      }
-    } catch (error) {
-      console.error('Unable to load platform options:', error);
-    }
-  }
-
-  async function loadPosts() {
-    setLoadingPosts(true);
-    try {
-      const posts = await getPosts(clientId);
-      if (Array.isArray(posts)) {
-        setScheduledPosts(posts);
-      }
-    } catch (error) {
-      console.error('Unable to load scheduled posts:', error);
-    } finally {
-      setLoadingPosts(false);
-    }
-  }
-
-  function togglePlatform(value) {
+  const togglePlatform = (value) => {
     setSelectedPlatforms((current) =>
       current.includes(value) ? current.filter((item) => item !== value) : [...current, value]
     );
-  }
+  };
 
-  function handleImageChange(event) {
+  const handleImageChange = (event) => {
     const file = event.target.files?.[0] ?? null;
     if (file) {
-      if (imagePreview) {
-        URL.revokeObjectURL(imagePreview);
-      }
+      if (imagePreview) URL.revokeObjectURL(imagePreview);
       setImageFile(file);
       setImagePreview(URL.createObjectURL(file));
-    } else {
-      setImageFile(null);
-      if (imagePreview) {
-        URL.revokeObjectURL(imagePreview);
-      }
-      setImagePreview(null);
     }
-  }
+  };
 
-  function resetForm() {
-    setCaption('');
-    setSelectedPlatforms([]);
-    setImageFile(null);
-    setImagePreview(null);
-    setPublishMode('now');
-    setScheduledDate('');
-    setScheduledTime('');
-    setFormError('');
-  }
-
-  async function handleSubmit(event) {
+  const handleSubmit = async (event) => {
     event.preventDefault();
     setFormError('');
 
@@ -235,12 +117,10 @@ export default function ClientScheduler() {
       setFormError('Caption is required.');
       return;
     }
-
-    if (selectedPlatforms.length === 0) {
+    if (publishMode !== 'draft' && selectedPlatforms.length === 0) {
       setFormError('Select at least one platform.');
       return;
     }
-
     if (publishMode === 'later' && (!scheduledDate || !scheduledTime)) {
       setFormError('Please choose a date and time for scheduling.');
       return;
@@ -249,13 +129,9 @@ export default function ClientScheduler() {
     const formData = new FormData();
     formData.append('caption', caption.trim());
     formData.append('mode', publishMode);
-    if (imageFile) {
-      formData.append('media', imageFile);
-    }
+    if (imageFile) formData.append('media', imageFile);
 
-    selectedPlatforms.forEach((platform) => {
-      formData.append('platforms', platform);
-    });
+    selectedPlatforms.forEach((platform) => formData.append('platforms', platform));
 
     if (publishMode === 'later') {
       formData.append('scheduled_time', `${scheduledDate}T${scheduledTime}`);
@@ -263,353 +139,974 @@ export default function ClientScheduler() {
 
     setSubmitting(true);
     try {
-      const response = await createPost(formData, clientId);
+      const response = await createPost(formData, getUser().client_id);
       if (response.publish_results) {
-        const failed = response.publish_results.filter((item) => item.status === 'failed');
+        const failed = response.publish_results.filter((item) => item.status !== 'published');
         if (failed.length > 0) {
-          const details = failed.map((item) => `${item.platform}: ${item.message}`).join('; ');
+          const details = failed.map((item) => `${item.platform}: ${item.message || item.status}`).join('; ');
           setFormError(`Post saved but failed to publish: ${details}`);
+          onCreated('Post created but publishing failed.', 'error');
+        } else {
+          onCreated('Post published successfully!', 'success');
         }
+      } else if (publishMode === 'draft') {
+        onCreated('Draft saved successfully!', 'success');
+      } else {
+        onCreated('Post scheduled successfully!', 'success');
       }
-      resetForm();
-      setShowAddPost(false);
-      await loadPosts();
+      onClose();
     } catch (error) {
       setFormError(error.message || 'Unable to create post.');
     } finally {
       setSubmitting(false);
     }
-  }
+  };
 
-  function buildCardData(post) {
-    if (!post || typeof post !== 'object') return null;
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto bg-slate-950/50 p-4">
+      <div className="card flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden">
+        <div className="flex items-center justify-between gap-4 border-b border-surface-variant/60 px-6 py-5">
+          <div>
+            <h3 className="card-heading">Create New Post</h3>
+            <p className="mt-0.5 text-sm text-on-surface-variant">Choose platforms, upload an image, and schedule or post immediately.</p>
+          </div>
+          <button onClick={onClose} className="btn btn-ghost p-2" aria-label="Close">
+            <span className="material-symbols-outlined text-[20px]">close</span>
+          </button>
+        </div>
 
-    const platform = Array.isArray(post.platforms) ? post.platforms[0] : post.platform;
-    const label = (Array.isArray(post.platforms) ? post.platforms[0] : platform) || 'Post';
-    const icon = PLATFORM_ICON_MAP[platform] ?? 'post_add';
-    const bg = PLATFORM_COLOR_MAP[platform] ?? 'bg-surface-container-lowest';
-    const scheduledTime = post.scheduled_time || post.created_at;
-    const status = post.status || 'SCHEDULED';
+        <form className="space-y-6 overflow-y-auto px-6 py-6" onSubmit={handleSubmit}>
+          <div className="grid gap-6 lg:grid-cols-2">
+            <div>
+              <label className="field-label" htmlFor="add-caption">Caption</label>
+              <textarea
+                id="add-caption"
+                value={caption}
+                onChange={(event) => setCaption(event.target.value)}
+                className="input h-32 resize-none"
+                placeholder="Write your post caption or message here..."
+              />
+            </div>
+            <div>
+              <span className="field-label">Upload Image</span>
+              <label className="flex min-h-[176px] cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-outline-variant/70 bg-surface-container-low/40 px-4 text-center text-on-surface-variant transition-colors hover:border-primary hover:bg-primary/5">
+                <span className="material-symbols-outlined text-4xl text-primary/60">photo_camera</span>
+                <span className="text-sm font-medium">Click to choose an image</span>
+                <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
+              </label>
+              {imagePreview && (
+                <div className="mt-3 overflow-hidden rounded-xl border border-surface-variant/60">
+                  <img src={imagePreview} alt="Preview" className="max-h-48 w-full object-cover" />
+                </div>
+              )}
+            </div>
+          </div>
 
-    return {
-      id: post.id,
-      platform: label,
-      type: post.type || 'Social Post',
-      content: post.caption || post.content || '',
-      date: formatDateTime(scheduledTime, { month: 'short', day: 'numeric' }),
-      time: formatDateTime(scheduledTime, { hour: '2-digit', minute: '2-digit' }),
-      prediction:
-        status === 'POSTED'
-          ? 'Published Immediately'
-          : status === 'FAILED'
-          ? 'Publish Failed'
-          : 'Scheduled for later',
-      gradient: bg,
-      icon,
-      status,
+          <div className="rounded-2xl border border-surface-variant/60 bg-surface-container-low/40 p-5">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+              <span className="text-sm font-semibold text-on-surface">Select Platforms</span>
+              <span className="text-xs text-on-surface-variant">{publishMode === 'draft' ? 'Optional for drafts' : 'Choose one or more'}</span>
+            </div>
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+              {platforms.map((platform) => {
+                const isSelected = selectedPlatforms.includes(platform.value);
+                return (
+                  <button
+                    type="button"
+                    key={platform.value}
+                    onClick={() => togglePlatform(platform.value)}
+                    className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-left text-sm font-medium transition-all ${
+                      isSelected
+                        ? 'border-primary bg-primary/10 text-primary'
+                        : 'border-surface-variant bg-surface text-on-surface hover:bg-surface-container-low'
+                    }`}
+                  >
+                    <PlatformLogo platform={platform.value} size={20} />
+                    {platform.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            {[
+              { key: 'now', label: 'Post Now', desc: 'Publish immediately', icon: 'bolt' },
+              { key: 'later', label: 'Schedule for Later', desc: 'Pick date and time', icon: 'schedule' },
+              { key: 'draft', label: 'Save as Draft', desc: 'Edit and publish later', icon: 'description' },
+            ].map((opt) => (
+              <button
+                key={opt.key}
+                type="button"
+                onClick={() => setPublishMode(opt.key)}
+                className={`rounded-2xl border p-4 text-left transition-all ${
+                  publishMode === opt.key
+                    ? 'border-primary bg-primary/10 text-primary'
+                    : 'border-surface-variant bg-surface text-on-surface hover:bg-surface-container-low'
+                }`}
+              >
+                <span className="material-symbols-outlined mb-2 text-[22px]">{opt.icon}</span>
+                <p className="text-sm font-bold">{opt.label}</p>
+                <p className="mt-0.5 text-xs text-on-surface-variant">{opt.desc}</p>
+              </button>
+            ))}
+          </div>
+
+          {publishMode === 'later' && (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="field-label">Date</label>
+                <input
+                  type="date"
+                  value={scheduledDate}
+                  onChange={(event) => setScheduledDate(event.target.value)}
+                  className="input"
+                />
+              </div>
+              <div>
+                <label className="field-label">Time</label>
+                <input
+                  type="time"
+                  value={scheduledTime}
+                  onChange={(event) => setScheduledTime(event.target.value)}
+                  className="input"
+                />
+              </div>
+            </div>
+          )}
+
+          {formError && (
+            <p className="rounded-xl bg-error-container px-4 py-3 text-sm font-medium text-on-error-container">{formError}</p>
+          )}
+
+          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+            <button type="button" onClick={onClose} className="btn btn-ghost">
+              Cancel
+            </button>
+            <button type="submit" disabled={submitting} className="btn btn-primary">
+              {submitting
+                ? 'Saving...'
+                : publishMode === 'later'
+                ? 'Schedule Post'
+                : publishMode === 'draft'
+                ? 'Save Draft'
+                : 'Post Now'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+/* -------------------- Edit Post Modal -------------------- */
+
+function EditPostModal({ post, platforms, onClose, onSaved }) {
+  const [caption, setCaption] = useState('');
+  const [hashtags, setHashtags] = useState('');
+  const [selectedPlatforms, setSelectedPlatforms] = useState([]);
+  const [scheduledDate, setScheduledDate] = useState('');
+  const [scheduledTime, setScheduledTime] = useState('');
+  const [mediaFile, setMediaFile] = useState(null);
+  const [mediaPreview, setMediaPreview] = useState(null);
+  const [formError, setFormError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (post) {
+      setCaption(post.caption || '');
+      setHashtags(post.hashtags || '');
+      setSelectedPlatforms(post.platforms || []);
+      if (post.scheduled_time) {
+        const d = new Date(post.scheduled_time);
+        if (!Number.isNaN(d.getTime())) {
+          setScheduledDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
+          setScheduledTime(`${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`);
+        }
+      } else {
+        setScheduledDate('');
+        setScheduledTime('');
+      }
+      setMediaFile(null);
+      setMediaPreview(null);
+      setFormError('');
+    }
+  }, [post]);
+
+  useEffect(() => {
+    return () => {
+      if (mediaPreview) URL.revokeObjectURL(mediaPreview);
     };
-  }
+  }, [mediaPreview]);
 
-  const postsToShow = scheduledPosts.length > 0 ? scheduledPosts.map(buildCardData) : staticPosts;
+  if (!post) return null;
+
+  const togglePlatform = (value) => {
+    setSelectedPlatforms((current) =>
+      current.includes(value) ? current.filter((item) => item !== value) : [...current, value]
+    );
+  };
+
+  const handleMediaChange = (event) => {
+    const file = event.target.files?.[0] ?? null;
+    if (file) {
+      if (mediaPreview) URL.revokeObjectURL(mediaPreview);
+      setMediaFile(file);
+      setMediaPreview(URL.createObjectURL(file));
+    }
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setFormError('');
+
+    if (!caption.trim()) {
+      setFormError('Caption is required.');
+      return;
+    }
+    if (selectedPlatforms.length === 0) {
+      setFormError('Select at least one platform.');
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('caption', caption.trim());
+    formData.append('hashtags', hashtags);
+    selectedPlatforms.forEach((p) => formData.append('platforms', p.toUpperCase()));
+    if (mediaFile) formData.append('media', mediaFile);
+    formData.append('scheduled_time', scheduledDate && scheduledTime ? `${scheduledDate}T${scheduledTime}` : '');
+
+    setSubmitting(true);
+    try {
+      await editPost(post.id, formData);
+      onSaved('Post updated successfully.', 'success');
+      onClose();
+    } catch (error) {
+      setFormError(error.message || 'Failed to update post.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto bg-slate-950/50 p-4">
+      <div className="card flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden">
+        <div className="flex items-center justify-between gap-4 border-b border-surface-variant/60 px-6 py-5">
+          <div>
+            <h3 className="card-heading">Edit Post</h3>
+            <p className="mt-0.5 text-sm text-on-surface-variant">Update caption, platforms, media or schedule time.</p>
+          </div>
+          <button onClick={onClose} className="btn btn-ghost p-2" aria-label="Close">
+            <span className="material-symbols-outlined text-[20px]">close</span>
+          </button>
+        </div>
+
+        <form className="space-y-6 overflow-y-auto px-6 py-6" onSubmit={handleSubmit}>
+          {(post.media_url || mediaPreview) && (
+            <div>
+              <label className="field-label">Current Media</label>
+              <div className="overflow-hidden rounded-2xl border border-surface-variant/60 bg-surface-container-low/40 p-3">
+                <img
+                  src={mediaPreview || post.media_url}
+                  alt="Media Preview"
+                  className="max-h-44 w-full rounded-xl object-contain"
+                />
+              </div>
+            </div>
+          )}
+
+          <div className="grid gap-6 lg:grid-cols-2">
+            <div>
+              <label className="field-label" htmlFor="edit-caption">Caption</label>
+              <textarea
+                id="edit-caption"
+                value={caption}
+                onChange={(event) => setCaption(event.target.value)}
+                className="input h-32 resize-none"
+              />
+            </div>
+            <div>
+              <label className="field-label" htmlFor="edit-hashtags">Hashtags</label>
+              <input
+                id="edit-hashtags"
+                value={hashtags}
+                onChange={(event) => setHashtags(event.target.value)}
+                className="input"
+                placeholder="#Innovation #SocialMedia"
+              />
+              <span className="field-label mt-4">Replace Media</span>
+              <label className="flex min-h-[120px] cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-outline-variant/70 bg-surface-container-low/40 px-4 text-center text-on-surface-variant transition-colors hover:border-primary hover:bg-primary/5">
+                <span className="material-symbols-outlined text-3xl text-primary/60">photo_camera</span>
+                <span className="text-sm font-medium">Click to choose a new image</span>
+                <input type="file" accept="image/*" className="hidden" onChange={handleMediaChange} />
+              </label>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-surface-variant/60 bg-surface-container-low/40 p-5">
+            <span className="mb-4 block text-sm font-semibold text-on-surface">Target Platforms</span>
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+              {platforms.map((platform) => {
+                const isSelected = selectedPlatforms.includes(platform.value);
+                return (
+                  <button
+                    type="button"
+                    key={platform.value}
+                    onClick={() => togglePlatform(platform.value)}
+                    className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-left text-sm font-medium transition-all ${
+                      isSelected
+                        ? 'border-primary bg-primary/10 text-primary'
+                        : 'border-surface-variant bg-surface text-on-surface hover:bg-surface-container-low'
+                    }`}
+                  >
+                    <PlatformLogo platform={platform.value} size={20} />
+                    {platform.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="field-label">Schedule Date (clear to remove)</label>
+              <input
+                type="date"
+                value={scheduledDate}
+                onChange={(event) => setScheduledDate(event.target.value)}
+                className="input"
+              />
+            </div>
+            <div>
+              <label className="field-label">Schedule Time</label>
+              <input
+                type="time"
+                value={scheduledTime}
+                onChange={(event) => setScheduledTime(event.target.value)}
+                className="input"
+              />
+            </div>
+          </div>
+
+          {formError && (
+            <p className="rounded-xl bg-error-container px-4 py-3 text-sm font-medium text-on-error-container">{formError}</p>
+          )}
+
+          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+            <button type="button" onClick={onClose} className="btn btn-ghost">
+              Cancel
+            </button>
+            <button type="submit" disabled={submitting} className="btn btn-primary">
+              {submitting ? 'Saving...' : 'Save Changes'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+/* -------------------- Calendar -------------------- */
+
+function Calendar({ posts, selectedDay, viewDate, onSelectDay, onViewChange }) {
+  const year = viewDate.getFullYear();
+  const month = viewDate.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const firstDayOfWeek = new Date(year, month, 1).getDay();
+  const now = new Date();
+  const isCurrentMonth = month === now.getMonth() && year === now.getFullYear();
+
+  const markers = useMemo(() => {
+    const m = {};
+    posts.forEach((post) => {
+      const ts = post.scheduled_time || post.posted_time || post.created_at;
+      if (!ts) return;
+      const d = new Date(ts);
+      if (d.getMonth() !== month || d.getFullYear() !== year) return;
+      const day = d.getDate();
+      if (!m[day]) m[day] = new Set();
+      m[day].add(post.status);
+    });
+    return m;
+  }, [posts, month, year]);
+
+  const dayPosts = useMemo(() => {
+    if (!selectedDay) return [];
+    return posts.filter((post) => {
+      const ts = post.scheduled_time || post.posted_time || post.created_at;
+      if (!ts) return false;
+      const d = new Date(ts);
+      return d.getDate() === selectedDay && d.getMonth() === month && d.getFullYear() === year;
+    });
+  }, [posts, selectedDay, month, year]);
+
+  const monthLabel = viewDate.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+
+  const goMonth = (delta) => {
+    onViewChange(new Date(year, month + delta, 1));
+    onSelectDay(null);
+  };
+
+  const goToday = () => {
+    onViewChange(new Date(now.getFullYear(), now.getMonth(), 1));
+    onSelectDay(null);
+  };
+
+  return (
+    <SectionCard
+      title="Calendar"
+      subtitle="Click a day to view its posts"
+      icon="calendar_month"
+      action={
+        <div className="flex items-center gap-1">
+          <button onClick={() => goMonth(-1)} className="btn btn-ghost p-1.5" aria-label="Previous month">
+            <span className="material-symbols-outlined text-[18px]">chevron_left</span>
+          </button>
+          <button onClick={goToday} className="btn btn-ghost p-1.5" aria-label="Today">
+            <span className="material-symbols-outlined text-[18px]">today</span>
+          </button>
+          <button onClick={() => goMonth(1)} className="btn btn-ghost p-1.5" aria-label="Next month">
+            <span className="material-symbols-outlined text-[18px]">chevron_right</span>
+          </button>
+        </div>
+      }
+    >
+      <p className="mb-4 text-center font-manrope text-base font-bold text-on-surface">{monthLabel}</p>
+      <div className="grid grid-cols-7 gap-1 text-center">
+        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
+          <div key={i} className="pb-2 text-[11px] font-bold tracking-wider text-on-surface-variant uppercase">{d}</div>
+        ))}
+        {Array.from({ length: firstDayOfWeek }, (_, i) => <div key={`e-${i}`} />)}
+        {Array.from({ length: daysInMonth }, (_, i) => {
+          const day = i + 1;
+          const m = markers[day];
+          const isToday = isCurrentMonth && day === now.getDate();
+          const isSelected = selectedDay === day;
+          return (
+            <button
+              key={day}
+              onClick={() => onSelectDay(isSelected ? null : day)}
+              className={`relative flex h-11 flex-col items-center justify-center rounded-xl text-sm transition-all hover:bg-primary/5 ${
+                isSelected
+                  ? 'bg-primary font-bold text-on-primary shadow-card hover:bg-primary'
+                  : isToday
+                  ? 'bg-primary/10 font-bold text-primary'
+                  : 'text-on-surface'
+              }`}
+            >
+              <span>{day}</span>
+              {m && !isSelected && (
+                <span className="absolute bottom-1 flex gap-[3px]">
+                  {m.has('POSTED') && <span className="h-1 w-1 rounded-full bg-emerald-500" />}
+                  {m.has('SCHEDULED') && <span className="h-1 w-1 rounded-full bg-primary" />}
+                  {m.has('FAILED') && <span className="h-1 w-1 rounded-full bg-red-500" />}
+                  {m.has('DRAFT') && <span className="h-1 w-1 rounded-full bg-outline-variant" />}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-surface-variant/60 pt-4">
+        {[
+          { label: 'Published', color: 'bg-emerald-500' },
+          { label: 'Scheduled', color: 'bg-primary' },
+          { label: 'Failed', color: 'bg-red-500' },
+          { label: 'Draft', color: 'bg-outline-variant' },
+        ].map((s) => (
+          <span key={s.label} className="flex items-center gap-1.5">
+            <span className={`h-2 w-2 rounded-full ${s.color}`} />
+            <span className="text-[11px] font-semibold text-on-surface-variant">{s.label}</span>
+          </span>
+        ))}
+      </div>
+
+      {selectedDay && (
+        <div className="mt-4 rounded-xl border border-surface-variant/60 bg-surface-container-low/50 p-4">
+          <p className="mb-2 flex items-center justify-between text-[11px] font-bold tracking-widest text-on-surface-variant uppercase">
+            <span>
+              {new Date(year, month, selectedDay).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+            </span>
+            <button onClick={() => onSelectDay(null)} className="font-semibold tracking-normal text-primary normal-case hover:underline">
+              Clear
+            </button>
+          </p>
+          {dayPosts.length === 0 ? (
+            <p className="text-sm text-on-surface-variant">No posts on this day.</p>
+          ) : (
+            <ul className="space-y-2">
+              {dayPosts.map((post) => (
+                <li key={post.id} className="flex items-center gap-2 text-sm">
+                  <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${statusDotColor(post.status)}`} />
+                  <span className="min-w-0 truncate text-on-surface">{post.caption || 'Untitled post'}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </SectionCard>
+  );
+}
+
+/* -------------------- Week Chart -------------------- */
+
+const TOOLTIP_STYLE = {
+  borderRadius: 12,
+  border: '1px solid #e4e2e5',
+  fontSize: 12,
+  boxShadow: '0 12px 40px -12px rgba(16,24,40,0.3)',
+};
+
+function WeekChart({ posts }) {
+  const chartData = useMemo(() => {
+    const days = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      days.push({ day: d.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase(), published: 0, scheduled: 0 });
+    }
+    posts.forEach((post) => {
+      const ts = post.status === 'POSTED' ? post.posted_time || post.updated_at || post.created_at : post.scheduled_time;
+      if (!ts) return;
+      const d = new Date(ts);
+      if (Number.isNaN(d.getTime())) return;
+      const now = new Date();
+      const start = new Date(now);
+      start.setDate(start.getDate() - 6);
+      start.setHours(0, 0, 0, 0);
+      if (d < start || d > now) return;
+      const idx = Math.floor((d - start) / (1000 * 60 * 60 * 24));
+      if (idx >= 0 && idx < 7) {
+        if (post.status === 'POSTED') days[idx].published += 1;
+        else if (post.status === 'SCHEDULED') days[idx].scheduled += 1;
+      }
+    });
+    return days;
+  }, [posts]);
+
+  const hasData = chartData.some((d) => d.published > 0 || d.scheduled > 0);
+
+  return (
+    <SectionCard
+      title="Posts This Week"
+      subtitle="Distribution of published and scheduled content"
+      icon="bar_chart"
+      className="lg:col-span-2"
+      bodyClassName="py-6"
+    >
+      {!hasData ? (
+        <EmptyState icon="bar_chart" title="No activity this week" message="Published and scheduled posts will appear here." />
+      ) : (
+        <div className="h-72 w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={chartData} barGap={6} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#efedf0" />
+              <XAxis dataKey="day" tick={{ fontSize: 12, fill: '#44474e' }} axisLine={false} tickLine={false} />
+              <YAxis allowDecimals={false} tick={{ fontSize: 12, fill: '#44474e' }} axisLine={false} tickLine={false} />
+              <Tooltip cursor={{ fill: 'rgba(3,22,53,0.05)' }} contentStyle={TOOLTIP_STYLE} />
+              <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
+              <Bar dataKey="published" name="Published" fill="#031635" radius={[6, 6, 0, 0]} maxBarSize={30} />
+              <Bar dataKey="scheduled" name="Scheduled" fill="#b6c6ef" radius={[6, 6, 0, 0]} maxBarSize={30} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </SectionCard>
+  );
+}
+
+/* -------------------- Page -------------------- */
+
+export default function ClientScheduler() {
+  const [showAddPost, setShowAddPost] = useState(false);
+  const [addInitialMode, setAddInitialMode] = useState('now');
+  const [editingPost, setEditingPost] = useState(null);
+  const [platformOptions, setPlatformOptions] = useState([]);
+  const [connectedPlatforms, setConnectedPlatforms] = useState([]);
+  const [posts, setPosts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [selectedCalendarDay, setSelectedCalendarDay] = useState(null);
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const n = new Date();
+    return new Date(n.getFullYear(), n.getMonth(), 1);
+  });
+  const [toast, setToast] = useState(null);
+
+  const showToast = (message, type = 'success') => setToast({ message, type });
+
+  const loadPlatforms = useCallback(async () => {
+    try {
+      const data = await getPlatforms();
+      if (Array.isArray(data) && data.length > 0) {
+        setPlatformOptions(data);
+      }
+    } catch {
+      // Non-fatal; fall back to empty
+    }
+  }, []);
+
+  const loadConnectedPlatforms = useCallback(async () => {
+    try {
+      const data = await getConnectedPlatforms();
+      if (Array.isArray(data)) setConnectedPlatforms(data);
+    } catch {
+      setConnectedPlatforms([]);
+    }
+  }, []);
+
+  const loadPosts = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await getPosts(getUser().client_id);
+      setPosts(Array.isArray(data) ? data : []);
+    } catch (err) {
+      setError(err.message || 'Failed to load posts.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadPlatforms();
+    loadConnectedPlatforms();
+    loadPosts();
+  }, [loadPlatforms, loadConnectedPlatforms, loadPosts]);
+
+  const handleDelete = async (post) => {
+    if (!window.confirm('Are you sure you want to delete this post? This action cannot be undone.')) return;
+    setActionLoading(true);
+    try {
+      await deletePost(post.id);
+      showToast('Post deleted successfully.', 'success');
+      loadPosts();
+    } catch (err) {
+      showToast(err.message || 'Failed to delete post.', 'error');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handlePublish = async (post) => {
+    setActionLoading(true);
+    try {
+      const response = await publishPost(post.id);
+      const failed = response.publish_results?.some((r) => r.status !== 'published');
+      showToast(
+        failed ? 'Publishing failed on one or more platforms.' : 'Post published successfully!',
+        failed ? 'error' : 'success'
+      );
+      loadPosts();
+    } catch (err) {
+      showToast(err.message || 'Failed to publish post.', 'error');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleRetry = async (post) => {
+    setActionLoading(true);
+    try {
+      const response = await retryPost(post.id);
+      const failed = response.publish_results?.some((r) => r.status !== 'published');
+      showToast(
+        failed ? 'Retry failed to publish to platforms.' : 'Post retried and published successfully!',
+        failed ? 'error' : 'success'
+      );
+      loadPosts();
+    } catch (err) {
+      showToast(err.message || 'Failed to retry post.', 'error');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleCreated = (message, type) => {
+    showToast(message, type);
+    loadPosts();
+    loadConnectedPlatforms();
+  };
+
+  const handleSaved = (message, type) => {
+    showToast(message, type);
+    loadPosts();
+  };
+
+  const selectablePlatforms = useMemo(() => {
+    if (connectedPlatforms.length > 0) {
+      return platformOptions.filter((p) =>
+        connectedPlatforms.some((c) => c.value === p.value && c.connected)
+      );
+    }
+    return platformOptions;
+  }, [platformOptions, connectedPlatforms]);
+
+  const filteredPosts = useMemo(() => {
+    if (!selectedCalendarDay) return posts;
+    return posts.filter((post) => {
+      const ts = post.scheduled_time || post.posted_time || post.created_at;
+      if (!ts) return false;
+      const d = new Date(ts);
+      return d.getDate() === selectedCalendarDay && d.getMonth() === calendarMonth.getMonth() && d.getFullYear() === calendarMonth.getFullYear();
+    });
+  }, [posts, selectedCalendarDay, calendarMonth]);
+
+  const selectedDayLabel = selectedCalendarDay
+    ? new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), selectedCalendarDay).toLocaleDateString('en-US', {
+        weekday: 'long',
+        month: 'short',
+        day: 'numeric',
+      })
+    : '';
+
+  const connectedCount = connectedPlatforms.filter((p) => p.connected).length;
 
   return (
     <ClientLayout>
-      <div className="flex justify-between items-end mb-xl px-xs">
-        <div>
-          <h2 className="font-headline-xl text-headline-xl text-primary">Scheduler</h2>
-          <p className="text-on-surface-variant font-body-lg">Manage and organize your scheduled social media content.</p>
-        </div>
-        <div className="flex gap-3">
-          <button className="bg-surface-container-lowest border border-primary text-primary px-6 py-2 rounded-lg font-label-bold flex items-center gap-2 hover:bg-surface-container-high transition-all">
-            <span className="material-symbols-outlined text-sm">description</span>
-            Save Draft
-          </button>
-          <button
-            onClick={() => setShowAddPost(true)}
-            className="bg-primary text-on-primary px-6 py-2 rounded-lg font-label-bold flex items-center gap-2 shadow-sm hover:opacity-90 active:scale-95 transition-all"
-          >
-            <span className="material-symbols-outlined text-sm">add</span>
-            Add Post
-          </button>
-        </div>
-      </div>
+      <Toast toast={toast} onClose={() => setToast(null)} />
 
-      {showAddPost && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/50 p-4">
-          <div className="w-full max-w-3xl max-h-[90vh] overflow-hidden rounded-3xl bg-white shadow-xl">
-            <div className="flex items-center justify-between border-b border-outline-variant/20 px-6 py-4">
-              <div>
-                <h3 className="font-headline-md text-headline-md">Create New Post</h3>
-                <p className="text-on-surface-variant text-sm">Choose platforms, upload an image, and schedule or post immediately.</p>
-              </div>
-              <button
-                onClick={() => {
-                  setShowAddPost(false);
-                  resetForm();
-                }}
-                className="rounded-full border border-outline-variant p-2 text-on-surface-variant hover:bg-surface-container-low transition-colors"
-              >
-                <span className="material-symbols-outlined">close</span>
-              </button>
-            </div>
-
-            <form className="space-y-6 px-6 py-6 overflow-y-auto" style={{ maxHeight: 'calc(90vh - 80px)' }} onSubmit={handleSubmit}>
-              <div className="grid gap-6 lg:grid-cols-2">
-                <div className="space-y-3">
-                  <label className="font-label-bold text-label-bold">Caption</label>
-                  <textarea
-                    value={caption}
-                    onChange={(event) => setCaption(event.target.value)}
-                    className="h-32 w-full rounded-3xl border border-outline-variant/50 bg-surface px-4 py-3 text-body-md outline-none focus:border-primary focus:ring-2 focus:ring-primary/10"
-                    placeholder="Write your post caption or message here..."
-                  />
-                </div>
-                <div className="space-y-3">
-                  <label className="font-label-bold text-label-bold">Upload Image</label>
-                  <label className="flex min-h-[190px] flex-col items-center justify-center gap-3 rounded-3xl border border-dashed border-outline-variant/50 bg-surface p-4 text-center text-on-surface-variant transition-colors hover:border-primary hover:bg-surface-container-low">
-                    <span className="material-symbols-outlined text-4xl text-primary">photo_camera</span>
-                    <span className="text-sm">Click to choose an image</span>
-                    <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
-                  </label>
-                  {imagePreview ? (
-                    <div className="rounded-3xl border border-outline-variant/50 bg-surface p-3">
-                      <img src={imagePreview} alt="Preview" className="max-h-48 w-full rounded-3xl object-cover" />
-                    </div>
-                  ) : imageFile ? (
-                    <div className="rounded-3xl border border-outline-variant/50 bg-surface p-3 text-sm text-on-surface-variant">
-                      Selected file: {imageFile.name}
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-
-              <div className="space-y-4 rounded-3xl border border-outline-variant/50 bg-surface p-4">
-                <div className="flex flex-wrap items-center gap-3">
-                  <span className="font-label-bold">Select Platforms</span>
-                  <span className="text-xs text-on-surface-variant">Choose one or more</span>
-                </div>
-                <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-                  {platformOptions.map((platform) => {
-                    const isSelected = selectedPlatforms.includes(platform.value);
-                    return (
-                      <button
-                        type="button"
-                        key={platform.value}
-                        onClick={() => togglePlatform(platform.value)}
-                        className={`rounded-3xl border px-4 py-3 text-left transition-all ${
-                          isSelected
-                            ? 'border-primary bg-primary/10 text-primary'
-                            : 'border-outline-variant/50 bg-surface text-on-surface'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <span className="inline-flex items-center justify-center text-lg">
-                            {renderPlatformIcon(platform.value)}
-                          </span>
-                          <span className="font-medium">{platform.label}</span>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="grid gap-4 lg:grid-cols-3">
-                <label className="rounded-3xl border border-outline-variant/50 bg-surface p-4">
-                  <input
-                    type="radio"
-                    checked={publishMode === 'now'}
-                    onChange={() => setPublishMode('now')}
-                    className="mr-2"
-                  />
-                  Post Now
-                </label>
-                <label className="rounded-3xl border border-outline-variant/50 bg-surface p-4">
-                  <input
-                    type="radio"
-                    checked={publishMode === 'later'}
-                    onChange={() => setPublishMode('later')}
-                    className="mr-2"
-                  />
-                  Schedule for Later
-                </label>
-                {publishMode === 'later' && (
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <label className="flex flex-col gap-2 text-sm font-medium">
-                      Date
-                      <input
-                        type="date"
-                        value={scheduledDate}
-                        onChange={(event) => setScheduledDate(event.target.value)}
-                        className="rounded-3xl border border-outline-variant/50 bg-white px-4 py-3 text-body-md outline-none focus:border-primary focus:ring-2 focus:ring-primary/10"
-                      />
-                    </label>
-                    <label className="flex flex-col gap-2 text-sm font-medium">
-                      Time
-                      <input
-                        type="time"
-                        value={scheduledTime}
-                        onChange={(event) => setScheduledTime(event.target.value)}
-                        className="rounded-3xl border border-outline-variant/50 bg-white px-4 py-3 text-body-md outline-none focus:border-primary focus:ring-2 focus:ring-primary/10"
-                      />
-                    </label>
-                  </div>
-                )}
-              </div>
-
-              {formError && <p className="text-sm text-error">{formError}</p>}
-
-              <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowAddPost(false);
-                    resetForm();
-                  }}
-                  className="rounded-3xl border border-outline-variant/50 px-6 py-3 font-semibold text-on-surface hover:bg-surface-container-low transition-all"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="rounded-3xl bg-primary px-6 py-3 font-semibold text-on-primary shadow-sm transition-all disabled:opacity-50"
-                >
-                  {submitting ? 'Posting...' : publishMode === 'later' ? 'Schedule Post' : 'Post Now'}
-                </button>
-              </div>
-            </form>
+      {actionLoading && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/10">
+          <div className="card flex items-center gap-3 px-5 py-4">
+            <div className="h-5 w-5 animate-spin rounded-full border-b-2 border-primary" />
+            <span className="text-sm font-semibold text-primary">Processing request...</span>
           </div>
         </div>
       )}
 
-      <div className="grid grid-cols-12 gap-gutter">
-        <div className="col-span-12 lg:col-span-9 space-y-md">
-          <div className="flex items-center justify-between">
-            <h3 className="font-headline-md text-headline-md">Upcoming Scheduled Posts</h3>
-            <button className="text-primary text-sm font-semibold hover:underline">View Calendar</button>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-md">
-            {loadingPosts ? (
-              <div className="col-span-1 md:col-span-2 rounded-3xl border border-outline-variant/30 bg-white p-8 text-center text-on-surface-variant">
-                Loading scheduled posts...
-              </div>
-            ) : postsToShow.length > 0 ? (
-              postsToShow.map((post, idx) => (
-                <div key={post.id ?? idx} className="bg-white p-lg rounded-xl border border-outline-variant/30 shadow-sm hover:shadow-md transition-all flex flex-col gap-4 group">
-                  <div className="flex justify-between items-start">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-lg ${post.gradient ?? post.bg} flex items-center justify-center text-white`}>
-                        <span className="material-symbols-outlined">{post.icon}</span>
-                      </div>
-                      <div>
-                        <p className="font-label-bold">{Array.isArray(post.platforms) ? post.platforms[0] : post.platform}</p>
-                        <p className="text-xs text-on-surface-variant">{post.type}</p>
-                      </div>
-                    </div>
-                    <span className="bg-primary-fixed text-on-primary-fixed px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider">
-                      {post.status === 'POSTED' ? 'Published' : post.status}
-                    </span>
-                  </div>
-                  <p className="text-body-md text-on-surface-variant line-clamp-2">{post.caption || post.content}</p>
-                  <div className="flex items-center gap-4 py-2 border-y border-outline-variant/20 text-xs font-semibold text-on-surface">
-                    <span className="flex items-center gap-1"><span className="material-symbols-outlined text-sm">calendar_today</span> {post.date}</span>
-                    <span className="flex items-center gap-1"><span className="material-symbols-outlined text-sm">schedule</span> {post.time}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1 text-on-tertiary-container bg-tertiary-fixed/30 px-2 py-1 rounded">
-                      <span className="material-symbols-outlined text-xs">trending_up</span>
-                      <span className="text-[10px] font-bold">{post.prediction}</span>
-                    </div>
-                    <div className="flex gap-2">
-                      <button className="p-2 text-on-surface-variant hover:text-primary transition-colors"><span className="material-symbols-outlined">edit</span></button>
-                      <button className="p-2 text-on-surface-variant hover:text-error transition-colors"><span className="material-symbols-outlined">delete</span></button>
-                    </div>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="col-span-1 md:col-span-2 rounded-3xl border border-outline-variant/30 bg-white p-8 text-center text-on-surface-variant">
-                No scheduled posts yet. Create a post using the Add Post button.
-              </div>
-            )}
-          </div>
-        </div>
+      <PageHeader
+        title="Scheduler"
+        subtitle="Manage and organize your scheduled social media content."
+        actions={
+          <>
+            <button
+              onClick={() => {
+                setAddInitialMode('draft');
+                setShowAddPost(true);
+              }}
+              className="btn btn-outline"
+            >
+              <span className="material-symbols-outlined text-[18px]">description</span>
+              Save Draft
+            </button>
+            <button
+              onClick={() => {
+                setAddInitialMode('now');
+                setShowAddPost(true);
+              }}
+              className="btn btn-primary"
+            >
+              <span className="material-symbols-outlined text-[18px]">add</span>
+              Add Post
+            </button>
+          </>
+        }
+      />
 
-        <div className="col-span-12 lg:col-span-3 space-y-xl">
-          <div className="bg-white rounded-xl border border-outline-variant/30 shadow-sm overflow-hidden">
-            <div className="p-md border-b border-outline-variant/20">
-              <h3 className="font-headline-md text-sm font-bold uppercase tracking-wide text-on-surface-variant">Connected Platforms</h3>
-            </div>
-            <div className="divide-y divide-outline-variant/10">
-              {[
-                { name: 'Instagram', stats: '12.4k followers', color: 'text-pink-600', icon: 'camera', status: 'check_circle' },
-                { name: 'Facebook', stats: '8.9k likes', color: 'text-blue-600', icon: 'facebook', status: 'check_circle' },
-                { name: 'Twitter/X', stats: '42.1k followers', color: 'text-black', icon: 'close', status: 'check_circle' },
-                { name: 'LinkedIn', stats: '156 Connections', color: 'text-[#0077B5]', icon: 'groups', status: 'pending' },
-              ].map((p, idx) => (
-                <div key={idx} className="px-md py-4 flex items-center justify-between hover:bg-surface-container-low transition-colors">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+        {/* Posts list */}
+        <SectionCard
+          title={selectedCalendarDay ? `Posts for ${selectedDayLabel}` : 'Upcoming & Recent Posts'}
+          subtitle={selectedCalendarDay ? 'Showing content for the selected day' : 'All scheduled, published, and draft content'}
+          icon="post_add"
+          className="lg:col-span-2"
+          action={!loading && <span className="badge badge-neutral">{filteredPosts.length} post{filteredPosts.length === 1 ? '' : 's'}</span>}
+        >
+          {loading ? (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="card animate-pulse p-5">
                   <div className="flex items-center gap-3">
-                    <div className={`w-2 h-2 rounded-full ${p.status === 'check_circle' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-orange-400'}`}></div>
-                    <span className={`material-symbols-outlined ${p.color}`}>{p.icon}</span>
-                    <div>
-                      <p className="text-sm font-bold">{p.name}</p>
-                      <p className="text-[10px] text-on-surface-variant">{p.stats}</p>
+                    <div className="h-11 w-11 rounded-xl bg-surface-container-high" />
+                    <div className="flex-1 space-y-2">
+                      <div className="h-3 w-3/4 rounded bg-surface-container-high" />
+                      <div className="h-3 w-1/2 rounded bg-surface-container-high" />
                     </div>
                   </div>
-                  <span className={`material-symbols-outlined text-sm ${p.status === 'check_circle' ? 'text-on-surface-variant' : 'text-on-surface-variant'}`} style={{ fontVariationSettings: p.status === 'check_circle' ? "'FILL' 1" : "'FILL' 0" }}>{p.status}</span>
+                  <div className="mt-4 h-3 w-full rounded bg-surface-container-high" />
+                  <div className="mt-2 h-3 w-2/3 rounded bg-surface-container-high" />
                 </div>
               ))}
             </div>
-          </div>
-        </div>
-
-        <div className="col-span-12">
-          <div className="bg-white p-lg rounded-xl border border-outline-variant/30 shadow-sm">
-            <div className="flex justify-between items-center mb-10">
+          ) : error ? (
+            <div className="flex flex-col items-center gap-4 px-6 py-12 text-center">
+              <span className="material-symbols-outlined text-5xl text-error">error</span>
               <div>
-                <h3 className="font-headline-md text-headline-md">Posts This Week</h3>
-                <p className="text-on-surface-variant text-sm">Distribution of content types across the week</p>
+                <h3 className="card-heading">Unable to load posts</h3>
+                <p className="mt-1 text-sm text-on-surface-variant">{error}</p>
               </div>
-              <div className="flex items-center gap-6">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-sm bg-primary"></div>
-                  <span className="text-xs font-semibold">Published</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-sm bg-inverse-primary"></div>
-                  <span className="text-xs font-semibold">Scheduled</span>
-                </div>
-              </div>
+              <button onClick={loadPosts} className="btn btn-primary">
+                Try Again
+              </button>
             </div>
-            <div className="flex items-end justify-between h-48 px-4 relative">
-              {[
-                { day: 'MON', p: 60, s: 30 },
-                { day: 'TUE', p: 45, s: 15 },
-                { day: 'WED', p: 80, s: 10 },
-                { day: 'THU', p: 55, s: 40 },
-                { day: 'FRI', p: 90, s: 10 },
-                { day: 'SAT', p: 20, s: 60 },
-                { day: 'SUN', p: 10, s: 75 },
-              ].map((d, idx) => (
-                <div key={idx} className="flex flex-col items-center gap-2 flex-1 group">
-                  <div className="w-full max-w-[48px] flex items-end gap-1 px-1 h-full">
-                    <div className="flex-1 bg-primary rounded-t-sm group-hover:opacity-80 transition-all" style={{ height: `${d.p}%` }}></div>
-                    <div className="flex-1 bg-inverse-primary rounded-t-sm group-hover:opacity-80 transition-all" style={{ height: `${d.s}%` }}></div>
+          ) : filteredPosts.length === 0 ? (
+            <EmptyState
+              icon="calendar_month"
+              title={selectedCalendarDay ? 'No posts on this day' : 'No posts yet'}
+              message={selectedCalendarDay ? 'Try selecting another day.' : 'Create a post or save a draft to get started.'}
+              action={
+                !selectedCalendarDay ? (
+                  <button
+                    onClick={() => {
+                      setAddInitialMode('now');
+                      setShowAddPost(true);
+                    }}
+                    className="btn btn-primary btn-sm mt-2"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">add</span>
+                    Create your first post
+                  </button>
+                ) : undefined
+              }
+            />
+          ) : (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              {filteredPosts.map((post) => {
+                const platform = Array.isArray(post.platforms) ? post.platforms[0] : null;
+                const timeStr = post.scheduled_time || post.posted_time || post.created_at;
+                return (
+                  <div key={post.id} className="card flex flex-col gap-4 p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card-hover">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-xl bg-surface-container-high">
+                          {post.media_url ? (
+                            <img src={post.media_url} alt="Post media" className="h-full w-full object-cover" />
+                          ) : platform ? (
+                            <span className="absolute inset-0 flex items-center justify-center">
+                              <PlatformLogo platform={platform} size={20} />
+                            </span>
+                          ) : (
+                            <span className="absolute inset-0 flex items-center justify-center text-primary/50">
+                              <span className="material-symbols-outlined text-[20px]">article</span>
+                            </span>
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1">
+                            {post.platforms.length > 0 ? (
+                              post.platforms.map((p, i) => <PlatformLogo key={i} platform={p} size={16} />)
+                            ) : (
+                              <span className="text-xs text-on-surface-variant">No platforms</span>
+                            )}
+                          </div>
+                          <p className="mt-1 flex items-center gap-2 text-xs text-on-surface-variant">
+                            <span className="material-symbols-outlined text-[14px]">schedule</span>
+                            {formatDateTime(timeStr, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) || 'Not scheduled'}
+                          </p>
+                        </div>
+                      </div>
+                      <StatusBadge status={post.status} />
+                    </div>
+
+                    <p className="line-clamp-2 text-sm leading-5 text-on-surface">{post.caption}</p>
+
+                    <div className="flex items-center justify-between border-t border-surface-variant/60 pt-3">
+                      <div className="flex gap-1">
+                        {post.status !== 'POSTED' && (
+                          <button
+                            onClick={() => setEditingPost(post)}
+                            className="btn btn-ghost p-1.5 text-on-surface-variant hover:text-primary"
+                            title="Edit post"
+                          >
+                            <span className="material-symbols-outlined text-[18px]">edit</span>
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleDelete(post)}
+                          className="btn btn-ghost p-1.5 text-on-surface-variant hover:text-error"
+                          title="Delete post"
+                        >
+                          <span className="material-symbols-outlined text-[18px]">delete</span>
+                        </button>
+                      </div>
+                      <div className="flex gap-2">
+                        {(post.status === 'SCHEDULED' || post.status === 'DRAFT') && (
+                          <button onClick={() => handlePublish(post)} className="btn btn-primary btn-sm">
+                            Publish now
+                          </button>
+                        )}
+                        {post.status === 'FAILED' && (
+                          <button onClick={() => handleRetry(post)} className="btn btn-danger btn-sm">
+                            Retry
+                          </button>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                  <span className="text-xs font-label-bold text-on-surface-variant">{d.day}</span>
-                </div>
-              ))}
-              <div className="absolute inset-0 pointer-events-none -z-10 flex flex-col justify-between pt-0 pb-6 opacity-10">
-                <div className="w-full border-t border-on-surface-variant"></div>
-                <div className="w-full border-t border-on-surface-variant"></div>
-                <div className="w-full border-t border-on-surface-variant"></div>
-                <div className="w-full border-t border-on-surface-variant"></div>
-              </div>
+                );
+              })}
             </div>
-          </div>
-        </div>
+          )}
+        </SectionCard>
+
+        {/* Calendar */}
+        <Calendar
+          posts={posts}
+          selectedDay={selectedCalendarDay}
+          viewDate={calendarMonth}
+          onSelectDay={setSelectedCalendarDay}
+          onViewChange={setCalendarMonth}
+        />
       </div>
+
+      <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-3">
+        {/* Week chart */}
+        <WeekChart posts={posts} />
+
+        {/* Connected platforms */}
+        <SectionCard
+          title="Connected Platforms"
+          subtitle="Accounts linked to your workspace"
+          icon="link"
+          action={<span className="badge badge-success">{connectedCount} connected</span>}
+        >
+          {connectedPlatforms.length === 0 ? (
+            <p className="text-sm text-on-surface-variant">Loading platform status...</p>
+          ) : (
+            <ul className="space-y-1">
+              {connectedPlatforms.map((platform) => (
+                <li
+                  key={platform.value}
+                  className="flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors hover:bg-surface-container-low/60"
+                >
+                  <PlatformLogo platform={platform.value} size={20} />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-on-surface">{platform.label}</p>
+                    <p className="truncate text-[11px] text-on-surface-variant">
+                      {platform.connected ? `@${platform.account_username || 'connected'}` : 'Not connected'}
+                    </p>
+                  </div>
+                  {platform.connected ? (
+                    <span className="badge badge-success shrink-0">Active</span>
+                  ) : (
+                    <Link to="/settings" className="btn btn-outline btn-sm shrink-0">
+                      Connect
+                    </Link>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </SectionCard>
+      </div>
+
+      <AddPostModal
+        open={showAddPost}
+        platforms={selectablePlatforms}
+        initialMode={addInitialMode}
+        onClose={() => setShowAddPost(false)}
+        onCreated={handleCreated}
+      />
+      <EditPostModal
+        post={editingPost}
+        platforms={selectablePlatforms}
+        onClose={() => setEditingPost(null)}
+        onSaved={handleSaved}
+      />
     </ClientLayout>
   );
 }
